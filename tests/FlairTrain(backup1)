@@ -1,0 +1,261 @@
+# import csv
+# import sys
+
+# def filter_csv(input_file, output_file):
+#     """
+#     Фильтрует CSV файл:
+#     - Удаляет строки, где первое поле начинается с 'skip' или 'speech'.
+#     - Сохраняет строки, где первое поле 'NEGATIVE', 'POSITIVE' или 'NEUTRAL'.
+#     - Корректно обрабатывает многострочные тексты в кавычках.
+#     """
+#     with open(input_file, 'r', newline='', encoding='utf-8') as infile, \
+#          open(output_file, 'w', newline='', encoding='utf-8') as outfile:
+
+#         # Создаем reader, который понимает кавычки и экранирование
+#         # Кавычка по умолчанию двойная (")
+#         reader = csv.reader(infile, delimiter=',', quotechar='"', skipinitialspace=True)
+#         writer = csv.writer(outfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
+#         rows_processed = 0
+#         rows_kept = 0
+
+#         for row in reader:
+#             rows_processed += 1
+#             # Проверяем, что строка не пустая
+#             if not row:
+#                 continue
+
+#             # Первый столбец — это наш ключ (skip, NEGATIVE, и т.д.)
+#             first_col = row[0].strip()
+
+#             # Проверяем, нужно ли удалить строку
+#             if first_col.startswith(('skip', 'speech')):
+#                 # print(f"Удалено: {first_col}...")
+#                 continue  # Пропускаем запись в выходной файл
+
+#             # Если строка начинается с нужных маркеров, записываем её
+#             if first_col.startswith(('NEGATIVE', 'POSITIVE', 'NEUTRAL', "label")):
+#                 writer.writerow(row)
+#                 rows_kept += 1
+#                 # print(f"Сохранено: {first_col}...")
+#             else:
+#                 # Если вдруг попалось что-то другое — тоже пропускаем (на всякий случай)
+#                print(f"Пропущено (неизвестный маркер): {first_col}...")
+
+#     print(f"\nГотово. Обработано строк: {rows_processed}, сохранено: {rows_kept}.")
+
+# if __name__ == "__main__":
+#     input_filename = "data/rusentiment.csv"   # Название вашего исходного файла
+#     output_filename = "data/rusentiment_clean.csv" 
+
+#     # Здесь можно указать имена файлов через аргументы командной строки
+#     if len(sys.argv) > 2:
+#         input_filename = sys.argv[1]
+#         output_filename = sys.argv[2]
+#     elif len(sys.argv) > 1:
+#         input_filename = sys.argv[1]
+#         print(f"Выходной файл не указан, будет использован {output_filename}")
+
+#     filter_csv(input_filename, output_filename)
+
+
+
+
+
+# import csv
+# import sys
+
+# def merge_csv_files(file1, file2, output_file):
+#     """
+#     Объединяет два CSV файла с разной структурой:
+#     - Первый файл: колонки 'label,text' (в формате CSV)
+#     - Второй файл: колонки 'text,label,src'
+    
+#     Результат: единый файл с колонками 'label,text'
+#     """
+    
+#     all_rows = []
+    
+#     # Читаем первый файл (используем csv.reader!)
+#     print(f"Чтение файла: {file1}")
+#     try:
+#         with open(file1, 'r', encoding='utf-8', newline='') as f:
+#             reader = csv.reader(f, delimiter=',', quotechar='"', skipinitialspace=True)
+#             header = next(reader)  # Пропускаем заголовок
+            
+#             for row in reader:
+#                 if len(row) >= 2:  # Убеждаемся, что есть минимум 2 колонки
+#                     label = row[0].strip()
+#                     text = row[1].strip()
+#                     all_rows.append([label, text])
+#     except Exception as e:
+#         print(f"  Ошибка при чтении {file1}: {e}")
+    
+#     # Читаем второй файл (тоже через csv.reader)
+#     print(f"Чтение файла: {file2}")
+#     try:
+#         with open(file2, 'r', encoding='utf-8', newline='') as f:
+#             reader = csv.reader(f, delimiter=',', quotechar='"')
+#             header = next(reader)  # Пропускаем заголовок
+            
+#             for row in reader:
+#                 if len(row) >= 2:
+#                     text = row[0].strip()
+#                     label_num = row[1].strip()
+                    
+#                     # Конвертируем числовые метки в текстовые
+#                     if label_num == '0':
+#                         label = 'NEUTRAL'
+#                     elif label_num == '1':
+#                         label = 'POSITIVE'
+#                     elif label_num == '2':
+#                         label = 'NEGATIVE'
+#                     else:
+#                         label = label_num
+                    
+#                     all_rows.append([label, text])
+#     except Exception as e:
+#         print(f"  Ошибка при чтении {file2}: {e}")
+    
+#     # Записываем объединенный результат
+#     print(f"\nЗапись объединенного файла: {output_file}")
+#     print(f"Всего строк: {len(all_rows)}")
+    
+#     try:
+#         with open(output_file, 'w', encoding='utf-8', newline='') as f:
+#             writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            
+#             # Записываем заголовок
+#             writer.writerow(['label', 'text'])
+            
+#             # Записываем данные
+#             for label, text in all_rows:
+#                 writer.writerow([label, text])
+                    
+#     except Exception as e:
+#         print(f"Ошибка при записи: {e}")
+
+
+# if __name__ == "__main__":
+
+#     file1 = "data/rusentiment_clean.csv"
+#     file2 = "data/sentiment_dataset.csv"
+#     output = "data/sentiment_dataset_merged.csv"
+    
+#     merge_csv_files(file1, file2, output)
+
+
+
+
+
+
+# import pandas as pd
+# from sklearn.model_selection import train_test_split
+
+# # 1. Загрузите ваш датасет (укажите правильный путь к вашему файлу)
+# # Предположим, что в файле есть колонки 'text' и 'label'
+# df = pd.read_csv('./data/sentiment_dataset_merged.csv', delimiter=',')
+
+# # 2. Посмотрим, какие метки есть в датасете (это поможет нам понять, что делать дальше)
+# print("Уникальные метки в датасете:", df['label'].unique())
+
+# # 3. Преобразование числовых меток в текстовые
+# # Эта операция нужна, только если ваши метки действительно числа.
+# # Словарь для преобразования: предполагаем, что 0 - нейтральная, 1 - позитивная, 2 - негативная.
+# label_mapping = {0: 'NEUTRAL', 1: 'POSITIVE', 2: 'NEGATIVE'}
+# if df['label'].dtype in ['int64', 'float64']:
+#     df['label'] = df['label'].map(label_mapping)
+#     print("Метки преобразованы из чисел в текст.")
+# else:
+#     print("Метки текстовые")
+
+# # 4. Разделим данные на обучающую, валидационную и тестовую выборки
+# # Сначала отделим тестовую выборку (20%)
+# df_train_val, df_test = train_test_split(df, test_size=0.2, random_state=42, stratify=df['label'])
+# # Затем разделим оставшиеся данные на train (80% от исходных) и validation (20% от исходных / 25% от train_val)
+# df_train, df_dev = train_test_split(df_train_val, test_size=0.25, random_state=42, stratify=df_train_val['label'])
+
+# print(f"Размер обучающей выборки: {len(df_train)}")
+# print(f"Размер валидационной выборки: {len(df_dev)}")
+# print(f"Размер тестовой выборки: {len(df_test)}")
+
+# # 5. Сохраняем в формате Flair
+# def save_flair_format(dataframe, filepath, text_col='text', label_col='label'):
+#     with open(filepath, 'w', encoding='utf-8') as f:
+#         for _, row in dataframe.iterrows():
+#             text = str(row[text_col]).replace('\n', ' ').replace('\r', ' ').strip()
+#             label = row[label_col]
+#             f.write(f"__label__{label} {text}\n")
+
+# # Сохраняем файлы
+# save_flair_format(df_train, 'data/train.txt')
+# save_flair_format(df_dev, 'data/dev.txt')
+# save_flair_format(df_test, 'data/test.txt')
+
+
+
+
+
+# from flair.data import Corpus
+# from flair.datasets import CSVClassificationCorpus
+# from flair.embeddings import FlairEmbeddings, DocumentRNNEmbeddings
+# from flair.models import TextClassifier
+# from flair.trainers import ModelTrainer
+# import torch
+
+# # 1. Укажите папку с данными
+# data_folder = 'data/'
+
+# # 2. Настройка маппинга колонок
+# column_name_map = {0: "label", 1: "text"}
+
+# # 3. Загружаем корпус
+# corpus: Corpus = CSVClassificationCorpus(
+#     data_folder,
+#     column_name_map,
+#     label_type='sentiment',
+#     skip_header=False,
+#     delimiter=' ',
+#     encoding='utf-8'
+# )
+
+# # 4. Создаем словарь меток
+# label_dict = corpus.make_label_dictionary(label_type='sentiment')
+
+# print(f"Метки в датасете: {label_dict.get_items()}")
+# print(f"Количество примеров в обучающей выборке: {len(corpus.train)}")
+# print(f"Количество примеров в валидационной выборке: {len(corpus.dev)}")
+# print(f"Количество примеров в тестовой выборке: {len(corpus.test)}")
+
+# # 5. Создаем эмбеддинги
+# print("Загрузка эмбеддингов...")
+# flair_embeddings_forward = FlairEmbeddings('multi-forward')
+# flair_embeddings_backward = FlairEmbeddings('multi-backward')
+
+# document_embeddings = DocumentRNNEmbeddings(
+#     embeddings=[flair_embeddings_forward, flair_embeddings_backward],
+#     hidden_size=512,
+#     reproject_words=True,
+#     reproject_words_dimension=256,
+#     bidirectional=True
+# )
+
+# # 6. Создаем классификатор
+# classifier = TextClassifier(
+#     document_embeddings, 
+#     label_dictionary=label_dict,
+#     label_type='sentiment',
+#     multi_label=False
+# )
+
+# # 7. Обучаем модель 
+# trainer = ModelTrainer(classifier, corpus)
+
+# trainer.train(
+#     base_path='data/rusentiment-flair-model',
+#     learning_rate=0.1,
+#     mini_batch_size=32,
+#     max_epochs=50,
+#     train_with_dev=True,
+#     optimizer=torch.optim.SGD
+# )

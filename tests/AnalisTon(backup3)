@@ -1,0 +1,255 @@
+import pandas as pd
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import asyncio
+from googletrans import Translator
+from flair.models import TextClassifier
+from flair.data import Sentence
+
+# Загрузка лексикона VADER
+nltk.download('vader_lexicon')
+
+# Инициализация анализаторов
+sia = SentimentIntensityAnalyzer()
+flair_sentiment = TextClassifier.load('en-sentiment')  # Модель Flair для англ. тональности
+
+def interpret_sentiment_scores(sentiment_scores):
+    if sentiment_scores['compound'] >= 0.05:
+        return "Positive"
+    elif sentiment_scores['compound'] <= -0.05:
+        return "Negative"
+    else:
+        return "Neutral"
+
+def get_actual_sentiment(rating):
+    """Преобразует rating в actual_sentiment."""
+    if pd.isna(rating):
+        return None
+    rating = int(rating)
+    if rating in [1, 2]:
+        return "Negative"
+    elif rating == 3:
+        return "Neutral"
+    elif rating in [4, 5]:
+        return "Positive"
+    else:
+        return None  # на случай некорректных значений
+
+def get_flair_score(text):
+    """
+    Анализирует тональность текста с помощью Flair.
+    Возвращает числовую оценку (1, 3, 5) и метку тональности.
+    """
+    sentence = Sentence(text)
+    flair_sentiment.predict(sentence)
+    label = sentence.labels[0].value
+    confidence = sentence.labels[0].score
+
+    if label == 'POSITIVE':
+        score = 5
+        sentiment_label = "Positive"
+    elif label == 'NEGATIVE':
+        score = 1
+        sentiment_label = "Negative"
+    else:
+        score = 3
+        sentiment_label = "Neutral"
+
+    return score, sentiment_label, confidence
+
+async def translate_text(text):
+    translator = Translator()
+    try:
+        result = await translator.translate(text, src='ru', dest='en')
+        return result.text
+    except Exception as e:
+        return text
+
+async def analyze_sentiment_from_csv(input_file, output_file, summary_file, text_column='text', rating_column='rating'):
+    # Чтение CSV
+    df = pd.read_csv(input_file, nrows=1000)
+
+    # Проверка столбцов
+    if text_column not in df.columns:
+        raise ValueError(f"Столбец '{text_column}' не найден в CSV-файле.")
+    if rating_column not in df.columns:
+        print(f"Предупреждение: столбец '{rating_column}' не найден. Статистика совпадений не будет рассчитана.")
+        use_rating = False
+    else:
+        use_rating = True
+
+    sentiment_results = []
+    translation_tasks = []
+
+    for text in df[text_column]:
+        if pd.isna(text):
+            sentiment_results.append({
+                'neg': 0.0,
+                'neu': 0.0,
+                'pos': 0.0,
+                'compound': 0.0,
+                'vader_sentiment': 'Neutral',
+                'flair_score': 3,
+                'flair_sentiment': 'Neutral',
+                'flair_confidence': 0.0,
+                'actual_sentiment': None,
+                'is_correct_vader': None,
+                'is_correct_flair': None
+            })
+        else:
+            task = asyncio.create_task(translate_text(text))
+            translation_tasks.append(task)
+
+    translated_texts = await asyncio.gather(*translation_tasks)
+
+    for idx, translated_text in enumerate(translated_texts):
+        # Анализ VADER
+        scores = sia.polarity_scores(translated_text)
+        vader_predicted = interpret_sentiment_scores(scores)
+
+        # Анализ Flair
+        flair_score, flair_predicted, flair_confidence = get_flair_score(translated_text)
+
+        # Если есть rating, получаем actual_sentiment
+        actual = None
+        is_correct_vader = None
+        is_correct_flair = None
+
+        if use_rating:
+            rating = df.iloc[idx][rating_column]
+            actual = get_actual_sentiment(rating)
+            is_correct_vader = (vader_predicted == actual) if actual is not None else None
+            is_correct_flair = (flair_predicted == actual) if actual is not None else None
+
+        sentiment_results.append({
+            'neg': scores['neg'],
+            'neu': scores['neu'],
+            'pos': scores['pos'],
+            'compound': scores['compound'],
+            'vader_sentiment': vader_predicted,
+            'flair_score': flair_score,
+            'flair_sentiment': flair_predicted,
+            'flair_confidence': flair_confidence,
+            'actual_sentiment': actual,
+            'is_correct_vader': is_correct_vader,
+            'is_correct_flair': is_correct_flair
+        })
+
+    results_df = pd.DataFrame(sentiment_results)
+    final_df = pd.concat([df, results_df], axis=1)
+
+    # Сохранение результатов
+    final_df.to_csv(output_file, index=False)
+    print(f"Анализ завершён. Результаты сохранены в '{output_file}'.")
+
+    # Сводная статистика по предсказанной тональности (VADER)
+    counts_vader = final_df['vader_sentiment'].value_counts()
+    total = len(final_df)
+    print("\n--- Сводная статистика по VADER ---")
+    print(f"Всего текстов обработано: {total}")
+    print(f"Positive: {counts_vader.get('Positive', 0)} ({counts_vader.get('Positive', 0)/total:.1%})")
+    print(f"Negative: {counts_vader.get('Negative', 0)} ({counts_vader.get('Negative', 0)/total:.1%})")
+    print(f"Neutral:  {counts_vader.get('Neutral', 0)} ({counts_vader.get('Neutral', 0)/total:.1%})")
+
+    # Сводная статистика по предсказанной тональности (Flair)
+    counts_flair = final_df['flair_sentiment'].value_counts()
+    print("\n--- Сводная статистика по Flair ---")
+    print(f"Positive: {counts_flair.get('Positive', 0)} ({counts_flair.get('Positive', 0)/total:.1%})")
+    print(f"Negative: {counts_flair.get('Negative', 0)} ({counts_flair.get('Negative', 0)/total:.1%})")
+    print(f"Neutral:  {counts_flair.get('Neutral', 0)} ({counts_flair.get('Neutral', 0)/total:.1%})")
+
+    # Статистика совпадений (если есть rating)
+    if use_rating:
+        # VADER
+        correct_vader_series = final_df['is_correct_vader'].dropna()
+        correct_vader_count = correct_vader_series.sum()
+        accuracy_vader = correct_vader_count / len(correct_vader_series) if len(correct_vader_series) > 0 else 0
+
+        # Flair
+        correct_flair_series = final_df['is_correct_flair'].dropna()
+        correct_flair_count = correct_flair_series.sum()
+        accuracy_flair = correct_flair_count / len(correct_flair_series) if len(correct_flair_series) > 0 else 0
+
+        print("\n--- Статистика совпадений с rating ---")
+        print(f"Количество текстов с корректным rating: {len(correct_vader_series)}")
+        print(f"VADER: совпадения — {int(correct_vader_count)} (точность: {accuracy_vader:.1%})")
+        print(f"Flair: совпадения — {int(correct_flair_count)} (точность: {accuracy_flair:.1%})")
+
+        print("\n--- Детальная статистика по VADER (по классам) ---")
+        for label in ['Positive', 'Negative', 'Neutral']:
+            subset = final_df[final_df['actual_sentiment'] == label]
+            if len(subset) == 0:
+                continue
+            correct_in_class = subset['is_correct_vader'].sum()
+            acc_in_class = correct_in_class / len(subset)
+            print(f"{label}: {int(correct_in_class)}/{len(subset)} ({acc_in_class:.1%})")
+
+        # Детально по классам (Flair)
+        print("\n--- Детальная статистика по Flair (по классам) ---")
+        for label in ['Positive', 'Negative', 'Neutral']:
+            subset = final_df[final_df['actual_sentiment'] == label]
+            if len(subset) == 0:
+                continue
+            correct_in_class = subset['is_correct_flair'].sum()
+            acc_in_class = correct_in_class / len(subset)
+            print(f"{label}: {int(correct_in_class)}/{len(subset)} ({acc_in_class:.1%})")
+
+        # Сохранение сводки совпадений
+        if summary_file:
+            summary_data = pd.DataFrame({
+                'metric': [
+                    'total_with_rating',
+                    'correct_predictions_vader',
+                    'accuracy_vader',
+                    'correct_predictions_flair',
+                    'accuracy_flair',
+                    'positive_count',
+                    'positive_accuracy_vader',
+                    'positive_accuracy_flair',
+                    'negative_count',
+                    'negative_accuracy_vader',
+                    'negative_accuracy_flair',
+                    'neutral_count',
+                    'neutral_accuracy_vader',
+                    'neutral_accuracy_flair'
+                ],
+                'value': [
+                    len(correct_vader_series),
+                    int(correct_vader_count),
+                    accuracy_vader,
+                    int(correct_flair_count),
+                    accuracy_flair,
+                    len(final_df[final_df['actual_sentiment'] == 'Positive']),
+                    (final_df[final_df['actual_sentiment'] == 'Positive']['is_correct_vader'].sum() /
+                     len(final_df[final_df['actual_sentiment'] == 'Positive']))
+                    if len(final_df[final_df['actual_sentiment'] == 'Positive']) > 0 else 0,
+                    (final_df[final_df['actual_sentiment'] == 'Positive']['is_correct_flair'].sum() /
+                     len(final_df[final_df['actual_sentiment'] == 'Positive']))
+                    if len(final_df[final_df['actual_sentiment'] == 'Positive']) > 0 else 0,
+                    len(final_df[final_df['actual_sentiment'] == 'Negative']),
+                    (final_df[final_df['actual_sentiment'] == 'Negative']['is_correct_vader'].sum() /
+                     len(final_df[final_df['actual_sentiment'] == 'Negative']))
+                    if len(final_df[final_df['actual_sentiment'] == 'Negative']) > 0 else 0,
+                    (final_df[final_df['actual_sentiment'] == 'Negative']['is_correct_flair'].sum() /
+                     len(final_df[final_df['actual_sentiment'] == 'Negative']))
+                    if len(final_df[final_df['actual_sentiment'] == 'Negative']) > 0 else 0,
+                    len(final_df[final_df['actual_sentiment'] == 'Neutral']),
+                    (final_df[final_df['actual_sentiment'] == 'Neutral']['is_correct_vader'].sum() /
+                     len(final_df[final_df['actual_sentiment'] == 'Neutral']))
+                    if len(final_df[final_df['actual_sentiment'] == 'Neutral']) > 0 else 0,
+                    (final_df[final_df['actual_sentiment'] == 'Neutral']['is_correct_flair'].sum() /
+                     len(final_df[final_df['actual_sentiment'] == 'Neutral']))
+                    if len(final_df[final_df['actual_sentiment'] == 'Neutral']) > 0 else 0
+                ]
+            })
+            summary_data.to_csv(summary_file, index=False)
+            print(f"Сводка сохранена в '{summary_file}'.")
+
+# Пример использования
+if __name__ == "__main__":
+    input_csv = "отзывы.csv"      # Путь к входному файлу
+    output_csv = "отзывы(результат работы).csv"  # Путь к выходному файлу
+    text_col = "text"                   # Имя столбца с текстами
+    summary_csv = "sentiment_summary.csv"  # Путь к файлу со сводкой (опционально)
+    
+    asyncio.run(analyze_sentiment_from_csv(input_csv, output_csv, summary_csv, text_col))
