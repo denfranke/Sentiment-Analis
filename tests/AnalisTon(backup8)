@@ -85,29 +85,18 @@ except Exception as e:
     logger.error(f"Ошибка загрузки RoBERTa: {e}")
     en_sentiment_pipeline = None
 
-#  DistilBERT 
+# Альтернативная легкая модель для английского (distilbert)
 try:
-    light_ru_sentiment = pipeline(
+    light_ru_model = pipeline(
         "sentiment-analysis",
-        model='Geotrend/distilbert-base-ru-cased', 
-        tokenizer='Geotrend/distilbert-base-ru-cased',
+        # model="distilbert-base-uncased-finetuned-sst-2-english",
+        model='Geotrend/distilbert-base-ru-cased',
         device=0 if torch.cuda.is_available() else -1
     )
-    logger.info("DistilBERT (Russian sentiment) модель загружена")
+    logger.info("DistilBERT модель загружена")
 except Exception as e:
-    logger.error(f"Ошибка загрузки русской DistilBERT: {e}")
-    # Альтернативная модель
-    try:
-        light_ru_sentiment = pipeline(
-            "sentiment-analysis",
-            model='cointegrated/rubert-tiny2',
-            tokenizer='cointegrated/rubert-tiny2',
-            device=0 if torch.cuda.is_available() else -1
-        )
-        logger.info("RuBERT-tiny2 модель загружена как альтернатива DistilBERT")
-    except Exception as e2:
-        logger.error(f"Ошибка загрузки альтернативной модели: {e2}")
-        light_ru_sentiment = None
+    logger.error(f"Ошибка загрузки DistilBERT: {e}")
+    light_en_model = None
 
 # Класс для предобработки текстов перед использованием моделей scikit-learn
 class TextPreprocessor:
@@ -562,15 +551,13 @@ def get_transformer_sentiment_ru(text):
         logger.error(f"Ошибка в RuBERT анализе: {e}")
         return None, 3, "Neutral", 0.0
 
-# Исправленная функция get_transformer_sentiment_en (для английских моделей)
 def get_transformer_sentiment_en(text, model_type='roberta'):
     """
-    Анализирует тональность английского текста с помощью 'roberta'
+    Анализирует тональность английского текста с помощью 'roberta' или 'distilbert'
     """
-    if model_type != 'roberta':
-        logger.warning(f"Модель {model_type} не поддерживается для английского, использую roberta")
+    pipeline_to_use = en_sentiment_pipeline if model_type == 'roberta' else light_ru_model
     
-    if en_sentiment_pipeline is None:
+    if pipeline_to_use is None:
         return None, 3, "Neutral", 0.0
     
     try:
@@ -578,182 +565,48 @@ def get_transformer_sentiment_en(text, model_type='roberta'):
         if len(text) > 600:
             text = text[:600]
         
-        result = en_sentiment_pipeline(text)[0]
+        result = pipeline_to_use(text)[0]
         label = result['label']
         confidence = result['score']
         
         # Преобразование меток модели в наш формат
-        if label in ['LABEL_2', 'POSITIVE', 'positive'] or 'positive' in label.lower():
-            sentiment_label = "Positive"
-            score = 5
-        elif label in ['LABEL_0', 'NEGATIVE', 'negative'] or 'negative' in label.lower():
-            sentiment_label = "Negative"
-            score = 1
+        if model_type == 'roberta':
+            # Для кардиффской модели
+            if label == 'LABEL_2' or 'positive' in label.lower():
+                sentiment_label = "Positive"
+                score = 5
+            elif label == 'LABEL_0' or 'negative' in label.lower():
+                sentiment_label = "Negative"
+                score = 1
+            else:
+                sentiment_label = "Neutral"
+                score = 3
         else:
-            sentiment_label = "Neutral"
-            score = 3
+            # Для distilbert
+            if label.upper() == 'POSITIVE':
+                sentiment_label = "Positive"
+                score = 5
+            elif label.upper() == 'NEGATIVE':
+                sentiment_label = "Negative"
+                score = 1
+            else:
+                sentiment_label = "Neutral"
+                score = 3
             
         return label, score, sentiment_label, confidence
     except Exception as e:
-        logger.error(f"Ошибка в RoBERTa анализе: {e}")
+        logger.error(f"Ошибка в {model_type} анализе: {e}")
         return None, 3, "Neutral", 0.0
 
-def get_transformer_sentiment_ru_light(text):
-    """
-    Анализирует тональность русского текста с помощью легкой DistilBERT модели
-    Исправлено: использование русской модели для анализа оригинального текста
-    """
-    # Инициализация легкой русской модели (если еще не создана)
-    if not hasattr(get_transformer_sentiment_ru_light, 'light_ru_pipeline'):
-        try:
-            # Используем русскую DistilBERT модель для sentiment analysis
-            get_transformer_sentiment_ru_light.light_ru_pipeline = pipeline(
-                "sentiment-analysis",
-                model='Geotrend/distilbert-base-ru-cased',  # Русская DistilBERT
-                tokenizer='Geotrend/distilbert-base-ru-cased',
-                device=0 if torch.cuda.is_available() else -1
-            )
-            logger.info("DistilBERT (Russian) модель загружена")
-        except Exception as e:
-            logger.error(f"Ошибка загрузки русской DistilBERT: {e}")
-            # Альтернативная русская модель, если первая не загрузилась
-            try:
-                get_transformer_sentiment_ru_light.light_ru_pipeline = pipeline(
-                    "sentiment-analysis",
-                    model='cointegrated/rubert-tiny2',
-                    tokenizer='cointegrated/rubert-tiny2',
-                    device=0 if torch.cuda.is_available() else -1
-                )
-                logger.info("RuBERT-tiny2 модель загружена как альтернатива")
-            except Exception as e2:
-                logger.error(f"Ошибка загрузки альтернативной модели: {e2}")
-                get_transformer_sentiment_ru_light.light_ru_pipeline = None
-    
-    if get_transformer_sentiment_ru_light.light_ru_pipeline is None:
-        return None, 3, "Neutral", 0.0
-    
+async def translate_text(text):
+    translator = Translator()
     try:
-        # Обрезаем слишком длинные тексты
-        if len(text) > 512:
-            text = text[:512]
-        
-        result = get_transformer_sentiment_ru_light.light_ru_pipeline(text)[0]
-        label = result['label']
-        confidence = result['score']
-        
-        # Преобразование меток модели в наш формат
-        label_lower = label.lower()
-        
-        # Обработка различных форматов меток
-        if 'positive' in label_lower or 'pos' in label_lower or label in ['LABEL_1', '1']:
-            sentiment_label = "Positive"
-            score = 5
-        elif 'negative' in label_lower or 'neg' in label_lower or label in ['LABEL_0', '0']:
-            sentiment_label = "Negative"
-            score = 1
-        elif 'neutral' in label_lower:
-            sentiment_label = "Neutral"
-            score = 3
-        else: 
-            # Если метка не распознана, считаем нейтральной
-            sentiment_label = "Neutral"
-            score = 3
-            
-        return label, score, sentiment_label, confidence
-        
-    except Exception as e:
-        logger.error(f"Ошибка в русской DistilBERT анализе: {e}")
-        return None, 3, "Neutral", 0.0
-
-class TextTranslator:
-    """
-    Класс для управления переводами текстов
-    """
-    def __init__(self, max_concurrent_translations=10):
-        self.translator = Translator()
-        self.max_concurrent = max_concurrent_translations
-        self.semaphore = asyncio.Semaphore(max_concurrent_translations)
-        logger.info(f"Инициализирован переводчик с максимум {max_concurrent_translations} параллельных переводов")
-    
-    async def translate_single(self, text):
-        """
-        Перевод одного текста с использованием семафора для ограничения параллельных запросов
-        """
-        if pd.isna(text) or not isinstance(text, str) or text.strip() == "":
+        if pd.isna(text) or text.strip() == "":
             return None
-        
-        async with self.semaphore:
-            try:
-                # Добавляем небольшую задержку для предотвращения перегрузки API
-                await asyncio.sleep(0.05)
-                result = await self.translator.translate(text, src='ru', dest='en')
-                return result.text
-            except Exception as e:
-                logger.error(f"Ошибка перевода: {e}")
-                return text  # Возвращаем оригинал в случае ошибки
-    
-    async def translate_batch(self, texts, batch_size=50):
-        """
-        Пакетный перевод текстов с контролем параллельности
-        
-        Parameters:
-        texts: list - список текстов для перевода
-        batch_size: int - размер пакета для последовательной обработки
-        
-        Returns:
-        list: список переведенных текстов
-        """
-        translated_texts = []
-        total_batches = (len(texts) + batch_size - 1) // batch_size
-        
-        logger.info(f"Начинается перевод {len(texts)} текстов, разбито на {total_batches} пакетов по {batch_size}")
-        
-        for batch_idx in range(0, len(texts), batch_size):
-            batch = texts[batch_idx:batch_idx + batch_size]
-            logger.info(f"Обработка пакета {batch_idx // batch_size + 1}/{total_batches} ({len(batch)} текстов)")
-            
-            # Создаем задачи для текущего пакета
-            tasks = []
-            for text in batch:
-                if pd.isna(text) or not isinstance(text, str) or text.strip() == "":
-                    tasks.append(None)
-                else:
-                    tasks.append(asyncio.create_task(self.translate_single(text)))
-            
-            # Ждем завершения всех задач в пакете
-            batch_results = []
-            for task in tasks:
-                if task is None:
-                    batch_results.append(None)
-                else:
-                    try:
-                        result = await task
-                        batch_results.append(result)
-                    except Exception as e:
-                        logger.error(f"Ошибка при получении результата перевода: {e}")
-                        batch_results.append(None)
-            
-            translated_texts.extend(batch_results)
-            
-            # Небольшая задержка между пакетами
-            if batch_idx + batch_size < len(texts):
-                await asyncio.sleep(0.5)
-        
-        logger.info(f"Перевод завершен. Успешно переведено: {sum(1 for t in translated_texts if t is not None and t != '')} из {len(texts)}")
-        return translated_texts
-    
-    def translate_sync(self, text):
-        """
-        Синхронный перевод для случаев, когда async не используется
-        """
-        try:
-            if pd.isna(text) or not isinstance(text, str) or text.strip() == "":
-                return None
-            result = self.translator.translate(text, src='ru', dest='en')
-            return result.text
-        except Exception as e:
-            logger.error(f"Ошибка синхронного перевода: {e}")
-            return text
+        result = await translator.translate(text, src='ru', dest='en')
+        return result.text
+    except Exception as e:
+        return text
 
 
 async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stats_file, 
@@ -787,23 +640,33 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
     if not sklearn_models:
         logger.warning("Не удалось загрузить ни одной scikit-learn модели. Будет использован только ensemble из трансформеров.")
 
-    # Получаем тексты для перевода
-    original_texts = df[text_column].tolist()
-    
-    # Инициализация переводчика
-    translator = TextTranslator(max_concurrent_translations=10)
-    
-    # Перевод всех текстов (асинхронно)
-    logger.info("Начало перевода текстов...")
-    translation_start = time.time()
-    translated_texts = await translator.translate_batch(original_texts, batch_size=50)
-    translation_time = time.time() - translation_start
-    logger.info(f"Перевод завершен за {translation_time:.2f} секунд")
-
-    # Анализ тональности
-    logger.info("Анализ тональности с помощью всех моделей...")
     sentiment_results = []
-    
+    translation_tasks = []
+    original_texts = []
+
+    # Собираем задачи на перевод только для непустых текстов
+    for text in df[text_column]:
+        original_texts.append(text)
+        if pd.isna(text) or text.strip() == "":
+            translation_tasks.append(None)
+        else:
+            task = asyncio.create_task(translate_text(text))
+            translation_tasks.append(task)
+ 
+    # Получаем переведенные тексты
+    logger.info("Перевод текстов...")
+    translated_texts = []
+    for task in tqdm(translation_tasks, desc="Перевод"):
+        if task is None:
+            translated_texts.append(None)
+        else:
+            try:
+                translated_text = await task
+                translated_texts.append(translated_text)
+            except:
+                translated_texts.append(None)
+
+    logger.info("Анализ тональности с помощью всех моделей...")
     for idx, (original_text, translated_text) in enumerate(tqdm(zip(original_texts, translated_texts), desc="Анализ", total=len(original_texts))):
         if pd.isna(original_text) or original_text.strip() == "":
             result_row = create_empty_result_row()
@@ -822,14 +685,13 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
             # RuBERT анализирует оригинальный текст (русский)
             rubert_raw, rubert_score, rubert_predicted, rubert_confidence = get_transformer_sentiment_ru(original_text)
 
-            # RoBERTa анализирует переведенный текст (английский)
+            # Трансформеры для английского (если есть перевод)
             roberta_raw, roberta_score, roberta_predicted, roberta_confidence = get_transformer_sentiment_en(
                 translated_text if translated_text else "", 'roberta'
             )
-            
-            # DistilBERT анализирует оригинальный текст (русский) - легкая русская модель
-            distilbert_raw, distilbert_score, distilbert_predicted, distilbert_confidence = get_transformer_sentiment_ru_light(original_text)
+            distilbert_raw, distilbert_score, distilbert_predicted, distilbert_confidence = get_transformer_sentiment_en(original_text, 'distilbert')
                    
+            
             # scikit-learn модели (русский) - используем загруженные модели из .joblib
             sklearn_results = {}
             for model_name in sklearn_models.keys():
@@ -906,7 +768,6 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
     
     elapsed_time = time.time() - start_time
     logger.info(f"Общее время выполнения: {elapsed_time:.2f} секунд")
-    logger.info(f"Время перевода: {translation_time:.2f} секунд ({translation_time/elapsed_time:.1%} от общего времени)")
     logger.info(f"Статистика сохранена в файл: {stats_file}")
 
 
