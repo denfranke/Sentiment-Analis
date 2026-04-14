@@ -33,8 +33,8 @@ nltk.download('punkt', quiet=True)
 
 # Инициализация анализаторов
 sia = SentimentIntensityAnalyzer()
-# flair_sentiment = TextClassifier.load('sentiment')
-flair_sentiment = TextClassifier.load('data/rusentiment-flair-model/final-model.pt')
+flair_sentiment = TextClassifier.load('sentiment')
+# flair_sentiment = TextClassifier.load('data/rusentiment-flair-model/final-model.pt')
 
 
 # Инициализация pymorphy2 для лемматизации русского текста
@@ -89,8 +89,10 @@ except Exception as e:
 try:
     light_ru_sentiment = pipeline(
         "sentiment-analysis",
-        model='Geotrend/distilbert-base-ru-cased', 
-        tokenizer='Geotrend/distilbert-base-ru-cased',
+        # model='Geotrend/distilbert-base-ru-cased', 
+        # tokenizer='Geotrend/distilbert-base-ru-cased',
+        model='cointegrated/rubert-tiny2',
+        tokenizer='cointegrated/rubert-tiny2',
         device=0 if torch.cuda.is_available() else -1
     )
     logger.info("DistilBERT (Russian sentiment) модель загружена")

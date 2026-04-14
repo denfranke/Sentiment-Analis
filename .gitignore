@@ -3,3 +3,4 @@ data/sentiment_dataset_merged.csv
 models/random_forest_model.joblib
 data/rusentiment-flair-model/final-model.pt
 .venv/Lib/site-packages/torch/lib/torch_cpu.dll
+/data

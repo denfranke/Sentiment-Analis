@@ -29,16 +29,16 @@ Neutral:  48 (4.8%)
 Средний RoBERTa score: 1.88
 
 --- DistilBERT (анализ английского перевода) ---
-Positive: 969 (96.9%)
-Negative: 31 (3.1%)
+Positive: 2 (0.2%)
+Negative: 998 (99.8%)
 Neutral:  0 (0.0%)
-Средний DistilBERT score: 4.88
+Средний DistilBERT score: 1.01
 
 --- ENSEMBLE (усредненный результат всех моделей) ---
-Positive: 219 (21.9%)
-Negative: 379 (37.9%)
-Neutral:  402 (40.2%)
-Средний Ensemble score: 2.90
+Positive: 128 (12.8%)
+Negative: 686 (68.6%)
+Neutral:  186 (18.6%)
+Средний Ensemble score: 2.36
 
 --- Actual (анализ русского оригинала) ---
 Positive: 247 (24.7%)
@@ -84,8 +84,8 @@ RoBERTa:
   Точность: 75.0%
 
 DistilBERT:
-  Совпадения: 262/1000
-  Точность: 26.2%
+  Совпадения: 636/1000
+  Точность: 63.6%
 
 Logistic Regression:
   Совпадения: 345/1000
@@ -100,8 +100,8 @@ Svm:
   Точность: 34.4%
 
 Ensemble:
-  Совпадения: 505/1000
-  Точность: 50.5%
+  Совпадения: 677/1000
+  Точность: 67.7%
 
 --- Детальная статистика по классам ---
 
@@ -110,22 +110,22 @@ Positive: всего 247
   Flair             : 91/247 (36.8%)
   RuBERT            : 128/247 (51.8%)
   RoBERTa           : 159/247 (64.4%)
-  DistilBERT        : 242/247 (98.0%)
+  DistilBERT        : 0/247 (0.0%)
   Logistic Regression: 80/247 (32.4%)
   Random Forest     : 86/247 (34.8%)
   Svm               : 78/247 (31.6%)
-  Ensemble          : 154/247 (62.3%)
+  Ensemble          : 121/247 (49.0%)
 
 Negative: всего 637
   VADER             : 327/637 (51.3%)
   Flair             : 135/637 (21.2%)
   RuBERT            : 347/637 (54.5%)
   RoBERTa           : 585/637 (91.8%)
-  DistilBERT        : 20/637 (3.1%)
+  DistilBERT        : 636/637 (99.8%)
   Logistic Regression: 196/637 (30.8%)
   Random Forest     : 174/637 (27.3%)
   Svm               : 204/637 (32.0%)
-  Ensemble          : 305/637 (47.9%)
+  Ensemble          : 531/637 (83.4%)
 
 Neutral: всего 116
   VADER             : 26/116 (22.4%)
@@ -136,4 +136,4 @@ Neutral: всего 116
   Logistic Regression: 69/116 (59.5%)
   Random Forest     : 69/116 (59.5%)
   Svm               : 62/116 (53.4%)
-  Ensemble          : 46/116 (39.7%)
+  Ensemble          : 25/116 (21.6%)

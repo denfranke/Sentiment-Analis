@@ -1,0 +1,57 @@
+2026-04-12 16:44:04,890 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,891 Model: "TextClassifier(
+  (embeddings): DocumentRNNEmbeddings(
+    (embeddings): StackedEmbeddings(
+      (list_embedding_0): FlairEmbeddings(
+        (lm): LanguageModel(
+          (drop): Dropout(p=0.1, inplace=False)
+          (encoder): Embedding(11854, 100)
+          (rnn): LSTM(100, 2048)
+        )
+      )
+      (list_embedding_1): FlairEmbeddings(
+        (lm): LanguageModel(
+          (drop): Dropout(p=0.1, inplace=False)
+          (encoder): Embedding(11854, 100)
+          (rnn): LSTM(100, 2048)
+        )
+      )
+    )
+    (word_reprojection_map): Linear(in_features=4096, out_features=256, bias=True)
+    (rnn): GRU(256, 512, batch_first=True, bidirectional=True)
+    (dropout): Dropout(p=0.5, inplace=False)
+  )
+  (decoder): Linear(in_features=2048, out_features=3, bias=True)
+  (dropout): Dropout(p=0.0, inplace=False)
+  (locked_dropout): LockedDropout(p=0.0)
+  (word_dropout): WordDropout(p=0.0)
+  (loss_function): CrossEntropyLoss()
+  (weights): None
+  (weight_tensor) None
+)"
+2026-04-12 16:44:04,892 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,892 Corpus: 70020 train + 14948 dev + 15000 test sentences
+2026-04-12 16:44:04,892 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,892 Train:  70020 sentences
+2026-04-12 16:44:04,892         (train_with_dev=False, train_with_test=False)
+2026-04-12 16:44:04,893 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,893 Training Params:
+2026-04-12 16:44:04,893  - learning_rate: "0.1" 
+2026-04-12 16:44:04,893  - mini_batch_size: "32"
+2026-04-12 16:44:04,893  - max_epochs: "10"
+2026-04-12 16:44:04,894  - shuffle: "True"
+2026-04-12 16:44:04,894 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,894 Plugins:
+2026-04-12 16:44:04,894  - AnnealOnPlateau | patience: '3', anneal_factor: '0.5', min_learning_rate: '0.0001'
+2026-04-12 16:44:04,894 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,894 Final evaluation on model from best epoch (best-model.pt)
+2026-04-12 16:44:04,895  - metric: "('micro avg', 'f1-score')"
+2026-04-12 16:44:04,895 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,895 Computation:
+2026-04-12 16:44:04,895  - compute on device: cpu
+2026-04-12 16:44:04,895  - embedding storage: none
+2026-04-12 16:44:04,895 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,896 Model training base path: "models\rusentiment_model"
+2026-04-12 16:44:04,896 ----------------------------------------------------------------------------------------------------
+2026-04-12 16:44:04,896 ----------------------------------------------------------------------------------------------------
+2026-04-12 17:10:41,581 epoch 1 - iter 218/2189 - loss 20.40704730 - time (sec): 1596.68 - samples/sec: 4.37 - lr: 0.100000 - momentum: 0.000000
