@@ -13,7 +13,7 @@ plt.style.use('default')
 sns.set_palette("husl")
 
 # Загружаем данные
-df = pd.read_csv('data/отзывы.csv')
+df = pd.read_csv('data/отзывы.csv',nrows=1000)
 
 print("="*50)
 print("ПЕРВИЧНЫЙ ОБЗОР ДАННЫХ")

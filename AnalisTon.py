@@ -33,8 +33,8 @@ nltk.download('punkt', quiet=True)
 
 # Инициализация анализаторов
 sia = SentimentIntensityAnalyzer()
-flair_sentiment = TextClassifier.load('sentiment')
-# flair_sentiment = TextClassifier.load('data/rusentiment-flair-model/final-model.pt')
+# flair_sentiment = TextClassifier.load('sentiment')
+flair_sentiment = TextClassifier.load('data/rusentiment-flair-model/final-model.pt')
 
 
 # Инициализация pymorphy2 для лемматизации русского текста
@@ -913,7 +913,6 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
 
 
 def create_empty_result_row():
-    """Создает пустую строку результатов для пустого текста"""
     result = {
         # VADER результаты
         'vader_neg': 0.0, 'vader_neu': 0.0, 'vader_pos': 0.0,
@@ -934,12 +933,29 @@ def create_empty_result_row():
         'distilbert_raw_label': None, 'distilbert_score': 3,
         'distilbert_sentiment': 'Neutral', 'distilbert_confidence': 0.0,
         
+        # Logistic Regression
+        'logistic_regression_score': 3, 'logistic_regression_sentiment': 'Neutral',
+        'logistic_regression_confidence': 0.0,
+        
+        # SVM
+        'svm_score': 3, 'svm_sentiment': 'Neutral', 'svm_confidence': 0.0,
+        
+        # Random Forest
+        'random_forest_score': 3, 'random_forest_sentiment': 'Neutral',
+        'random_forest_confidence': 0.0,
+        
+        # Ensemble
+        'ensemble_score_raw': 3.0, 'ensemble_score': 3, 'ensemble_sentiment': 'Neutral',
+        
         # Actual и метрики
         'actual_sentiment': None,
+        'is_correct_vader': None, 'is_correct_flair': None, 'is_correct_rubert': None,
+        'is_correct_roberta': None, 'is_correct_distilbert': None,
+        'is_correct_logistic_regression': None, 'is_correct_svm': None,
+        'is_correct_random_forest': None, 'is_correct_ensemble': None,
         'translated_text': None
     }
     
-    # Добавляем поля для scikit-learn моделей (будут заполнены позже)
     return result
 
 def create_result_row(scores, vader_predicted,
@@ -957,38 +973,76 @@ def create_result_row(scores, vader_predicted,
     else:
         vader_score = 3
     
-    # Сбор всех scores для ensemble
-    all_scores = [
-        vader_score,
-        flair_score,
-        rubert_score,
-        roberta_score,
-        distilbert_score
-    ]
+    # Получаем scores от scikit-learn моделей с значениями по умолчанию
+    logistic_score = 3
+    svm_score = 3
+    random_forest_score = 3
     
-    # Добавляем scores от scikit-learn моделей
+    logistic_sentiment = "Neutral"
+    svm_sentiment = "Neutral"
+    random_forest_sentiment = "Neutral"
+    
+    logistic_confidence = 0.0
+    svm_confidence = 0.0
+    random_forest_confidence = 0.0
+    
+    # Извлекаем значения из sklearn_results, если они есть
     for model_name, model_result in sklearn_results.items():
-        all_scores.append(model_result.get('score', 3))
+        if 'logistic' in model_name.lower():
+            logistic_score = model_result.get('score', 3)
+            logistic_sentiment = model_result.get('sentiment', 'Neutral')
+            logistic_confidence = model_result.get('confidence', 0.0)
+        elif 'svm' in model_name.lower():
+            svm_score = model_result.get('score', 3)
+            svm_sentiment = model_result.get('sentiment', 'Neutral')
+            svm_confidence = model_result.get('confidence', 0.0)
+        elif 'random' in model_name.lower() or 'forest' in model_name.lower():
+            random_forest_score = model_result.get('score', 3)
+            random_forest_sentiment = model_result.get('sentiment', 'Neutral')
+            random_forest_confidence = model_result.get('confidence', 0.0)
+    
+    # Сбор всех 8 scores для ensemble
+    all_scores = [
+        vader_score,           # 1. VADER
+        flair_score,           # 2. Flair
+        rubert_score,          # 3. RuBERT
+        roberta_score,         # 4. RoBERTa
+        distilbert_score,      # 5. DistilBERT
+        logistic_score,        # 6. Logistic Regression
+        svm_score,             # 7. SVM
+        random_forest_score    # 8. Random Forest
+    ]
     
     # Фильтруем None значения и вычисляем ensemble_score
     valid_scores = [s for s in all_scores if s is not None]
-    ensemble_score = round(sum(valid_scores) / len(valid_scores)) if valid_scores else 3
     
-    # Определение ensemble_sentiment на основе ensemble_score
-    if ensemble_score >= 4:
+    if valid_scores:
+        ensemble_score_raw = sum(valid_scores) / len(valid_scores)
+        ensemble_score_rounded = round(ensemble_score_raw)
+    else:
+        ensemble_score_raw = 3.0
+        ensemble_score_rounded = 3
+    
+    # Определение ensemble_sentiment на основе ensemble_score_rounded
+    if ensemble_score_rounded >= 4:
         ensemble_sentiment = "Positive"
-    elif ensemble_score <= 2:
+    elif ensemble_score_rounded <= 2:
         ensemble_sentiment = "Negative"
     else:
         ensemble_sentiment = "Neutral"
     
     # Вычисление метрик корректности
-    is_correct_vader = (vader_predicted == actual) if actual is not None else None
-    is_correct_flair = (flair_predicted == actual) if actual is not None else None
-    is_correct_rubert = (rubert_predicted == actual) if actual is not None else None
-    is_correct_roberta = (roberta_predicted == actual) if actual is not None else None
-    is_correct_distilbert = (distilbert_predicted == actual) if actual is not None else None
-    is_correct_ensemble = (ensemble_sentiment == actual) if actual is not None else None
+    actual_sentiment = actual
+    
+    is_correct_vader = (vader_predicted == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_flair = (flair_predicted == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_rubert = (rubert_predicted == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_roberta = (roberta_predicted == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_distilbert = (distilbert_predicted == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_logistic = (logistic_sentiment == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_svm = (svm_sentiment == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_random_forest = (random_forest_sentiment == actual_sentiment) if actual_sentiment is not None else None
+    is_correct_ensemble = (ensemble_sentiment == actual_sentiment) if actual_sentiment is not None else None
     
     result = {
         # VADER результаты
@@ -1012,29 +1066,39 @@ def create_result_row(scores, vader_predicted,
         'distilbert_raw_label': distilbert_raw, 'distilbert_score': distilbert_score,
         'distilbert_sentiment': distilbert_predicted, 'distilbert_confidence': distilbert_confidence,
         
+        # Logistic Regression результаты
+        'logistic_regression_score': logistic_score,
+        'logistic_regression_sentiment': logistic_sentiment,
+        'logistic_regression_confidence': logistic_confidence,
+        
+        # SVM результаты
+        'svm_score': svm_score,
+        'svm_sentiment': svm_sentiment,
+        'svm_confidence': svm_confidence,
+        
+        # Random Forest результаты
+        'random_forest_score': random_forest_score,
+        'random_forest_sentiment': random_forest_sentiment,
+        'random_forest_confidence': random_forest_confidence,
+        
         # Ensemble результаты
-        'ensemble_score': ensemble_score,
+        'ensemble_score_raw': ensemble_score_raw,
+        'ensemble_score': ensemble_score_rounded,
         'ensemble_sentiment': ensemble_sentiment,
         
         # Actual и метрики
-        'actual_sentiment': actual,
+        'actual_sentiment': actual_sentiment,
         'is_correct_vader': is_correct_vader,
         'is_correct_flair': is_correct_flair,
         'is_correct_rubert': is_correct_rubert,
         'is_correct_roberta': is_correct_roberta,
         'is_correct_distilbert': is_correct_distilbert,
+        'is_correct_logistic_regression': is_correct_logistic,
+        'is_correct_svm': is_correct_svm,
+        'is_correct_random_forest': is_correct_random_forest,
         'is_correct_ensemble': is_correct_ensemble,
         'translated_text': translated_text
     }
-    
-    # Добавляем результаты scikit-learn моделей
-    for model_name, model_result in sklearn_results.items():
-        # Создаем безопасное имя для колонки (заменяем дефисы и другие спецсимволы)
-        safe_name = model_name.replace('-', '_').replace(' ', '_')
-        result[f'{safe_name}_score'] = model_result.get('score', 3)
-        result[f'{safe_name}_sentiment'] = model_result.get('sentiment', 'Neutral')
-        result[f'{safe_name}_confidence'] = model_result.get('confidence', 0.0)
-        result[f'is_correct_{safe_name}'] = (model_result.get('sentiment') == actual) if actual is not None else None
     
     return result
 
@@ -1047,100 +1111,50 @@ def print_statistics_to_file(final_df, use_rating, stats_file):
         f.write("СТАТИСТИКА АНАЛИЗА ТОНАЛЬНОСТИ\n")
         f.write("="*70 + "\n")
         
-        # Статистика по VADER
-        counts_vader = final_df['vader_sentiment'].value_counts()
-        f.write("\n--- VADER (анализ английского перевода) ---\n")
-        f.write(f"Всего текстов: {total}\n")
-        f.write(f"Positive: {counts_vader.get('Positive', 0)} ({counts_vader.get('Positive', 0)/total:.1%})\n")
-        f.write(f"Negative: {counts_vader.get('Negative', 0)} ({counts_vader.get('Negative', 0)/total:.1%})\n")
-        f.write(f"Neutral:  {counts_vader.get('Neutral', 0)} ({counts_vader.get('Neutral', 0)/total:.1%})\n")
-        f.write(f"Средний VADER score: {final_df['vader_score'].mean():.2f}\n")
-
-        # Статистика по Flair
-        counts_flair = final_df['flair_sentiment'].value_counts()
-        f.write("\n--- Flair (анализ русского оригинала) ---\n")
-        f.write(f"Positive: {counts_flair.get('Positive', 0)} ({counts_flair.get('Positive', 0)/total:.1%})\n")
-        f.write(f"Negative: {counts_flair.get('Negative', 0)} ({counts_flair.get('Negative', 0)/total:.1%})\n")
-        f.write(f"Neutral:  {counts_flair.get('Neutral', 0)} ({counts_flair.get('Neutral', 0)/total:.1%})\n")
-        f.write(f"Средний Flair score: {final_df['flair_score'].mean():.2f}\n")
+        # Список всех моделей для вывода
+        models_list = [
+            ('VADER', 'vader_sentiment', 'vader_score', 'английского перевода'),
+            ('Flair', 'flair_sentiment', 'flair_score', 'русского оригинала'),
+            ('RuBERT', 'rubert_sentiment', 'rubert_score', 'русского оригинала'),
+            ('RoBERTa', 'roberta_sentiment', 'roberta_score', 'английского перевода'),
+            ('DistilBERT', 'distilbert_sentiment', 'distilbert_score', 'русского оригинала'),
+            ('Logistic Regression', 'logistic_regression_sentiment', 'logistic_regression_score', 'русского оригинала'),
+            ('SVM', 'svm_sentiment', 'svm_score', 'русского оригинала'),
+            ('Random Forest', 'random_forest_sentiment', 'random_forest_score', 'русского оригинала'),
+            ('ENSEMBLE', 'ensemble_sentiment', 'ensemble_score', 'усредненный результат')
+        ]
         
-        # Статистика по RuBERT
-        counts_rubert = final_df['rubert_sentiment'].value_counts()
-        f.write("\n--- RuBERT (анализ русского оригинала) ---\n")
-        f.write(f"Positive: {counts_rubert.get('Positive', 0)} ({counts_rubert.get('Positive', 0)/total:.1%})\n")
-        f.write(f"Negative: {counts_rubert.get('Negative', 0)} ({counts_rubert.get('Negative', 0)/total:.1%})\n")
-        f.write(f"Neutral:  {counts_rubert.get('Neutral', 0)} ({counts_rubert.get('Neutral', 0)/total:.1%})\n")
-        f.write(f"Средний RuBERT score: {final_df['rubert_score'].mean():.2f}\n")
+        for name, sent_col, score_col, lang in models_list:
+            if sent_col in final_df.columns:
+                counts = final_df[sent_col].value_counts()
+                f.write(f"\n--- {name} (анализ {lang}) ---\n")
+                f.write(f"Всего текстов: {total}\n")
+                f.write(f"Positive: {counts.get('Positive', 0)} ({counts.get('Positive', 0)/total:.1%})\n")
+                f.write(f"Negative: {counts.get('Negative', 0)} ({counts.get('Negative', 0)/total:.1%})\n")
+                f.write(f"Neutral:  {counts.get('Neutral', 0)} ({counts.get('Neutral', 0)/total:.1%})\n")
+                if score_col in final_df.columns:
+                    f.write(f"Средний {name.split()[0]} score: {final_df[score_col].mean():.2f}\n")
         
-        # Статистика по RoBERTa
-        counts_roberta = final_df['roberta_sentiment'].value_counts()
-        f.write("\n--- RoBERTa (анализ английского перевода) ---\n")
-        f.write(f"Positive: {counts_roberta.get('Positive', 0)} ({counts_roberta.get('Positive', 0)/total:.1%})\n")
-        f.write(f"Negative: {counts_roberta.get('Negative', 0)} ({counts_roberta.get('Negative', 0)/total:.1%})\n")
-        f.write(f"Neutral:  {counts_roberta.get('Neutral', 0)} ({counts_roberta.get('Neutral', 0)/total:.1%})\n")
-        f.write(f"Средний RoBERTa score: {final_df['roberta_score'].mean():.2f}\n")
-        
-        # Статистика по DistilBERT
-        counts_distilbert = final_df['distilbert_sentiment'].value_counts()
-        f.write("\n--- DistilBERT (анализ английского перевода) ---\n")
-        f.write(f"Positive: {counts_distilbert.get('Positive', 0)} ({counts_distilbert.get('Positive', 0)/total:.1%})\n")
-        f.write(f"Negative: {counts_distilbert.get('Negative', 0)} ({counts_distilbert.get('Negative', 0)/total:.1%})\n")
-        f.write(f"Neutral:  {counts_distilbert.get('Neutral', 0)} ({counts_distilbert.get('Neutral', 0)/total:.1%})\n")
-        f.write(f"Средний DistilBERT score: {final_df['distilbert_score'].mean():.2f}\n")
-        
-        # Статистика по Ensemble
-        counts_ensemble = final_df['ensemble_sentiment'].value_counts()
-        f.write("\n--- ENSEMBLE (усредненный результат всех моделей) ---\n")
-        f.write(f"Positive: {counts_ensemble.get('Positive', 0)} ({counts_ensemble.get('Positive', 0)/total:.1%})\n")
-        f.write(f"Negative: {counts_ensemble.get('Negative', 0)} ({counts_ensemble.get('Negative', 0)/total:.1%})\n")
-        f.write(f"Neutral:  {counts_ensemble.get('Neutral', 0)} ({counts_ensemble.get('Neutral', 0)/total:.1%})\n")
-        f.write(f"Средний Ensemble score: {final_df['ensemble_score'].mean():.2f}\n")
-        
-        # Статистика по scikit-learn моделям (динамически определяем)
-        sklearn_cols = [col for col in final_df.columns if col.endswith('_sentiment') and col not in 
-                       ['vader_sentiment', 'flair_sentiment', 'rubert_sentiment', 
-                        'roberta_sentiment', 'distilbert_sentiment', 'ensemble_sentiment']]
-        
-        for col_name in sklearn_cols:
-            model_name = col_name.replace('_sentiment', '').replace('_', ' ').title()
-            counts = final_df[col_name].value_counts()
-            score_col = col_name.replace('_sentiment', '_score')
-            
-            f.write(f"\n--- {model_name} (анализ русского оригинала) ---\n")
-            f.write(f"Positive: {counts.get('Positive', 0)} ({counts.get('Positive', 0)/total:.1%})\n")
-            f.write(f"Negative: {counts.get('Negative', 0)} ({counts.get('Negative', 0)/total:.1%})\n")
-            f.write(f"Neutral:  {counts.get('Neutral', 0)} ({counts.get('Neutral', 0)/total:.1%})\n")
-            if score_col in final_df.columns:
-                f.write(f"Средний {model_name} score: {final_df[score_col].mean():.2f}\n")
-
         # Статистика совпадений (если есть rating)
         if use_rating:
             f.write("\n" + "="*70 + "\n")
             f.write("СТАТИСТИКА СОВПАДЕНИЙ С РЕАЛЬНЫМИ ОЦЕНКАМИ\n")
             f.write("="*70 + "\n")
             
-            # Сбор метрик для всех моделей
-            models = [
+            # Список моделей для проверки корректности
+            correct_models = [
                 ('VADER', 'is_correct_vader'),
                 ('Flair', 'is_correct_flair'),
                 ('RuBERT', 'is_correct_rubert'),
                 ('RoBERTa', 'is_correct_roberta'),
-                ('DistilBERT', 'is_correct_distilbert')
+                ('DistilBERT', 'is_correct_distilbert'),
+                ('Logistic Regression', 'is_correct_logistic_regression'),
+                ('SVM', 'is_correct_svm'),
+                ('Random Forest', 'is_correct_random_forest'),
+                ('Ensemble', 'is_correct_ensemble')
             ]
             
-            # Добавляем scikit-learn модели
-            sklearn_correct_cols = [col for col in final_df.columns if col.startswith('is_correct_') and col not in
-                                   ['is_correct_vader', 'is_correct_flair', 'is_correct_rubert', 
-                                    'is_correct_roberta', 'is_correct_distilbert', 'is_correct_ensemble']]
-            
-            for col_name in sklearn_correct_cols:
-                model_name = col_name.replace('is_correct_', '').replace('_', ' ').title()
-                models.append((model_name, col_name))
-            
-            # Добавляем Ensemble
-            models.append(('Ensemble', 'is_correct_ensemble'))
-            
-            for model_name, col_name in models:
+            for model_name, col_name in correct_models:
                 if col_name in final_df.columns:
                     correct_series = final_df[col_name].dropna()
                     if len(correct_series) > 0:
@@ -1149,8 +1163,7 @@ def print_statistics_to_file(final_df, use_rating, stats_file):
                         f.write(f"\n{model_name}:\n")
                         f.write(f"  Совпадения: {int(correct_count)}/{len(correct_series)}\n")
                         f.write(f"  Точность: {accuracy:.1%}\n")
-                    
-
+            
             # Детальная статистика по классам
             f.write("\n--- Детальная статистика по классам ---\n")
             for label in ['Positive', 'Negative', 'Neutral']:
@@ -1160,15 +1173,14 @@ def print_statistics_to_file(final_df, use_rating, stats_file):
                 
                 f.write(f"\n{label}: всего {len(subset)}\n")
                 
-                for model_name, col_name in models:
+                for model_name, col_name in correct_models:
                     if col_name in subset.columns:
                         correct = subset[col_name].sum()
                         if len(subset) > 0:
                             acc = correct / len(subset)
-                            f.write(f"  {model_name:18}: {int(correct)}/{len(subset)} ({acc:.1%})\n")
+                            f.write(f"  {model_name:20}: {int(correct)}/{len(subset)} ({acc:.1%})\n")
 
 def save_summary(final_df, summary_file, models):
-    """Сохранение сводной статистики в файл"""
     try:
         summary_data = []
         

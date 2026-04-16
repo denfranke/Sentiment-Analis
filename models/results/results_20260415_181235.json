@@ -1,0 +1,17 @@
+{
+  "logistic_regression": {
+    "accuracy": 0.6946166666666667,
+    "f1_score": 0.6975570445004763,
+    "model_path": "models\\logistic_regression_model.joblib"
+  },
+  "svm_linear": {
+    "accuracy": 0.6929666666666666,
+    "f1_score": 0.6940627313189744,
+    "model_path": "models\\svm_linear_model.joblib"
+  },
+  "random_forest": {
+    "accuracy": 0.6679333333333334,
+    "f1_score": 0.6672107345146199,
+    "model_path": "models\\random_forest_model.joblib"
+  }
+}

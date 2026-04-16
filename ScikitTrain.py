@@ -33,7 +33,7 @@ warnings.filterwarnings('ignore')
 # Параметры данных
 DATA_CONFIG = {
     # 'file_path': 'data/sentiment_dataset_merged_2.csv',  # Путь к файлу с данными
-    'file_path': 'data/sentiment_dataset_merged_3_shuffled.csv',
+    'file_path': 'data/sentiment_dataset_merged_2_shuffled.csv',
     'text_column': 'text',                              # Колонка с текстами
     'label_column': 'label',                             # Колонка с метками
     'encoding': 'utf-8',                                 # Кодировка файла
@@ -41,7 +41,7 @@ DATA_CONFIG = {
     'test_size': 0.2,                                    # Размер тестовой выборки
     'random_state': 42,                                  # Random state
     'sample_random': False ,                              # Случайная выборка
-    'nrows':100000
+    'nrows':300000
 }
 
 # Параметры обучения
