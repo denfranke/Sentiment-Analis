@@ -766,7 +766,7 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
     
     # Чтение CSV
     try:
-        df = pd.read_csv(input_file, nrows=1000)
+        df = pd.read_csv(input_file, nrows=10)
         logger.info(f"Загружено {len(df)} строк отзывов")
     except Exception as e:
         logger.error(f"Ошибка чтения файла: {e}")
