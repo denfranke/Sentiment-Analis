@@ -686,33 +686,22 @@ class TextTranslator:
         
         async with self.semaphore:
             try:
-                # Добавляем небольшую задержку для предотвращения перегрузки API
-                await asyncio.sleep(0.05)
+                # Уменьшаем задержку для ускорения
+                await asyncio.sleep(0.01)
                 result = await self.translator.translate(text, src='ru', dest='en')
                 return result.text
-            except Exception as e:
-                logger.error(f"Ошибка перевода: {e}")
-                return text  # Возвращаем оригинал в случае ошибки
+            except Exception:
+                return text
     
     async def translate_batch(self, texts, batch_size=50):
         """
         Пакетный перевод текстов с контролем параллельности
-        
-        Parameters:
-        texts: list - список текстов для перевода
-        batch_size: int - размер пакета для последовательной обработки
-        
-        Returns:
-        list: список переведенных текстов
         """
         translated_texts = []
         total_batches = (len(texts) + batch_size - 1) // batch_size
         
-        logger.info(f"Начинается перевод {len(texts)} текстов, разбито на {total_batches} пакетов по {batch_size}")
-        
         for batch_idx in range(0, len(texts), batch_size):
             batch = texts[batch_idx:batch_idx + batch_size]
-            logger.info(f"Обработка пакета {batch_idx // batch_size + 1}/{total_batches} ({len(batch)} текстов)")
             
             # Создаем задачи для текущего пакета
             tasks = []
@@ -731,17 +720,15 @@ class TextTranslator:
                     try:
                         result = await task
                         batch_results.append(result)
-                    except Exception as e:
-                        logger.error(f"Ошибка при получении результата перевода: {e}")
+                    except Exception:
                         batch_results.append(None)
             
             translated_texts.extend(batch_results)
             
-            # Небольшая задержка между пакетами
+            # Минимальная задержка между пакетами
             if batch_idx + batch_size < len(texts):
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)
         
-        logger.info(f"Перевод завершен. Успешно переведено: {sum(1 for t in translated_texts if t is not None and t != '')} из {len(texts)}")
         return translated_texts
     
     def translate_sync(self, text):
@@ -754,19 +741,23 @@ class TextTranslator:
             result = self.translator.translate(text, src='ru', dest='en')
             return result.text
         except Exception as e:
-            logger.error(f"Ошибка синхронного перевода: {e}")
+            # logger.error(f"Ошибка синхронного перевода: {e}")
             return text
 
 
 async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stats_file, 
                                      text_column='text', rating_column='label',
-                                     models_dir='models'):
+                                     models_dir='models', max_rows=None):
     logger.info(f"Начинаем анализ файла: {input_file}")
     start_time = time.time()
     
     # Чтение CSV
     try:
-        df = pd.read_csv(input_file, nrows=10)
+        if max_rows:
+            logger.info(f"Загрузка только {max_rows} первых строк")
+            df = pd.read_csv(input_file, nrows=max_rows)  
+        else:
+            df = pd.read_csv(input_file) 
         logger.info(f"Загружено {len(df)} строк отзывов")
     except Exception as e:
         logger.error(f"Ошибка чтения файла: {e}")
@@ -1248,12 +1239,13 @@ if __name__ == "__main__":
     summary_csv = "answer/sentiment_summary.csv" # файл со сводкой
     stats_file = "answer/sentiment_statistics.txt" # файл с логами
     models_dir = "models"  # директория с предобученными моделями .joblib
-
+    max_rows = 1000
+    
     try:
         asyncio.run(analyze_sentiment_from_csv(
-            input_csv, output_csv, summary_csv, stats_file, 
-            text_col, rating_col, models_dir
-        ))
+        input_csv, output_csv, summary_csv, stats_file, 
+        text_col, rating_col, models_dir, max_rows
+    ))
     except KeyboardInterrupt:
         logger.info("Анализ прерван пользователем")
     except Exception as e:

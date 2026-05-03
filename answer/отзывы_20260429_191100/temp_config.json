@@ -1,8 +1,0 @@
-{
-  "input_file": "D:/Documents/Visual Studio Code/MainFolder/Diplom/data/отзывы.csv",
-  "output_dir": "answer\\отзывы_20260429_191100",
-  "text_column": "id",
-  "rating_column": "id",
-  "use_rating": true,
-  "max_rows": null
-}

@@ -39,7 +39,7 @@ def run_analysis(config_file):
     asyncio.run(analyze_sentiment_from_csv(
         input_file, output_csv, summary_csv, stats_file,
         text_column, rating_column if use_rating else None,
-        'models'
+        'models', max_rows=config.get('max_rows')
     ))
     
     print(f"\n[OK] Анализ завершен!")
