@@ -1,0 +1,6 @@
+{
+  "input_file": "D:/Downloads/dataset — копия.jsonl",
+  "output_dir": "answer\\dialogs_dataset — копия_20260923_181009",
+  "is_dialog": true,
+  "max_rows": 1
+}

@@ -484,26 +484,38 @@ def interpret_sentiment_scores(sentiment_scores):
         return "Neutral"
     
 def get_actual_sentiment(rating):
-    if pd.isna(rating):
+    if pd.isna(rating) or rating is None:
         return None
-    
+
+    # Уже нормализованная метка
     if isinstance(rating, str):
-        rating = rating.strip().upper()
-        if rating in ['NEGATIVE', 'NEUTRAL', 'POSITIVE']:
-            return rating.capitalize()
+        s = rating.strip()
+        low = s.lower()
+        if low in ('positive', 'pos', 'положит', 'позитив'):
+            return 'Positive'
+        if low in ('negative', 'neg', 'отрицат', 'негатив'):
+            return 'Negative'
+        if low in ('neutral', 'neu', 'нейтрал'):
+            return 'Neutral'
+
+        # На случай, если пришло как '5'/'3'/'1'
         try:
-            rating = int(float(rating))
-        except:
+            rating = int(float(s))
+        except (ValueError, TypeError):
             return None
     else:
-        rating = int(rating)
-        if rating in [1, 2]:
-            return "Negative"
-        elif rating == 3:
-            return "Neutral"
-        elif rating in [4, 5]:
-            return "Positive"
-    
+        try:
+            rating = int(rating)
+        except (ValueError, TypeError):
+            return None
+
+    if rating in (1, 2):
+        return 'Negative'
+    if rating == 3:
+        return 'Neutral'
+    if rating in (4, 5):
+        return 'Positive'
+
     return None
 
 def get_flair_score(text):
@@ -863,6 +875,12 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
 
     # Создание итогового DataFrame
     results_df = pd.DataFrame(sentiment_results)
+
+    overlap_cols = [c for c in results_df.columns if c in df.columns]
+    if overlap_cols:
+        logger.info(f"Убираю дублирующиеся столбцы из исходного df: {overlap_cols}")
+        df = df.drop(columns=overlap_cols)
+
     final_df = pd.concat([df, results_df], axis=1)
 
     # Сохранение результатов

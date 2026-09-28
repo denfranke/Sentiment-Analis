@@ -1,0 +1,129 @@
+﻿dialog_id,message_index,message_text,vader_sentiment,vader_score,flair_sentiment,flair_score,rubert_sentiment,rubert_score,roberta_sentiment,roberta_score,distilbert_sentiment,distilbert_score,ensemble_sentiment,ensemble_score,logistic_regression_sentiment,logistic_regression_score,random_forest_sentiment,random_forest_score,svm_sentiment,svm_score
+sample_1,0,Катали на такой. Свободного ляма говоришь не было? А ежемесячно на заправки сколько бы уходило не прикидывал? ...,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Neutral,3,Negative,1,Neutral,3
+sample_1,1,а расход у неё какой?,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,4,Positive,5,Neutral,3,Positive,5
+sample_1,2,"Написано 290л бак, запас хода 750км, ну в среднем 39л на сотню",Neutral,3,Negative,1,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_1,3,Карб от Москвича и норм :. ,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_2,0,"Можно же сделать на один глаз, не? Нафига тебе супер-зрение на обоих?",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_2,1,А потом ходить так? ..,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Negative,1,Neutral,3,Neutral,3
+sample_2,2,У меня повышенная светобоязнь. Если на улице ярко - двумя глазами смотреть невозможно. Поэтому примерно так и хожу :C,Negative,1,Neutral,3,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_2,3,А в чем причина? Ходил к врачу?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_2,4,"Ставят коньюктивит. Хотя глаза не болят, не слезятся и не гноятся. Наследственность от отца, у сестры тоже такое есть, но в меньшей степени",Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_3,0,Может ты ещё и баночку со звёздочкой с первого раза открываешь? Что ты такое?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_3,1,Хотите сказать что её открывать нужно? Её вроде просто прикладываешь куда нужно и всё. ,Neutral,3,Negative,1,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_3,2,"Так то и чупа-чупс можно с обёрткой рассосать, если не снимается.... ",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_3,3,Да и на дольше хватит!,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_4,0,"Видимо имелось ввиду не щенки, а щенята",Neutral,3,Negative,1,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_4,1,А котята тогда как по другому? Котенки?...,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_4,2,"Котодети, видать",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_4,3,"Кошкодети(мужика на моей аве загуглите, забавно про них сказал :D. ",Neutral,3,Neutral,3,Negative,1,Positive,5,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_4,4,"Да-да. я с этого видео и взял, просто подзабыл. ",Neutral,3,Negative,1,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_5,0,"Коментарии можно сохранять!?? охренеть, спасибо чувак",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Positive,5,Positive,5,Positive,5
+sample_5,1,"Спасибо что сказал что кмменты можно сохранять, сохранил. Пригодиться!",Neutral,3,Negative,1,Positive,5,Positive,5,Positive,5,Positive,4,Positive,5,Positive,5,Positive,5
+sample_5,2,Что сделаЕТ? ПригодиТСЯ ...,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_5,3,я двоечник :. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_6,0,грустно...,Neutral,3,Neutral,3,Negative,1,Positive,5,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_6,1,"А если одинаково стоили бы, то уже веселее?. ",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Positive,5,Neutral,3,Positive,5
+sample_6,2,"Продам ВАЗ-2112, или обменяю на фару от Порше Кайенн; с моей доплатой",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_6,3,хочешь потрогать мой порше?,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_7,0,"Тоже не понимаю, откуда эти стандарты за 5 лет машина должна пробежать овер 80к км. ",Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_7,1,Смотря какой город. У меня в Екатеринбурге за 1 год и 4 месяца получилось 30 тыс км. Езда на работу и домой плюс магазины. ,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Neutral,3,Negative,1
+sample_7,2,У меня в Екатеринбурге у коллеги пробег 13тыс за 5 лет. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Positive,5
+sample_7,3,значит у вас разные Екатеринбурги,Neutral,3,Negative,1,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Positive,5,Neutral,3
+sample_7,4,"да нет, просто живет рядом с работой, в основном пешком ходит, а авто нужен чтоб с ребенком до больницы доехать или раз в неделю за продуктами. ",Neutral,3,Negative,1,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Positive,5,Negative,1
+sample_7,5,у меня пробег почти за 3 года около 4 тысяч. водитель выходного дня =. ,Neutral,3,Neutral,3,Positive,5,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_8,0,Да уж... видимо старенькая статейка сейчас больше половины погон изменено...,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Negative,1,Neutral,3,Neutral,3
+sample_8,1,А прапоров разве не того?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_8,2,"Того сделали с должностями прапоров попросту упразнили, а звание как было так и есть. ",Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Negative,1
+sample_8,3,а прапора нынче должности КВ занимают? или ЗКР Я просто свое в 2007 году отслужил. ,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_8,4,"В основном должности старшин роты, реже КО, ну и в качестве исключения если офицеров вообще нет то КВ",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_8,5,"Ну это так и было, ты же говоришь, должности сократили..",Neutral,3,Neutral,3,Negative,1,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Neutral,3
+sample_9,0,она НЕ выкладывала скан паспорта. скан - это изображение паспорта в полный разворот. а тут мы видим лишь кусочек неизвестной бумаги,Neutral,3,Negative,1,Negative,1,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_9,1,"А вопрос тем временем остается открытый - если она выложит хоть скан всех страниц, что вы будете делать после этого для того, чтобы ей помочь?",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_9,2,а тебе не все ли равно?,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_9,3,"Ну потому что ясен пень, что ничего. Нервы потрепите ей, почешите ЧСВ себе - и все. ",Neutral,3,Neutral,3,Negative,1,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_10,0,"Эх...мог бы для приличия на тысячной купюре все это дело провернуть, больше правдивости было бы. ",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_10,1,Причем здесь номинал купюры?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_10,2,"При том, что часто ты просвечиваешь 50 рублевые купюры?",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_10,3,Я вообще не просвечиваю купюры. ,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_11,0,Где лагман хороший делают?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Positive,4,Positive,5,Positive,5,Positive,5
+sample_11,1,Хинкальная на Химиков,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_11,2,"Спасибо за совет, буду знать, что у них заказать. ",Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,5,Positive,4,Positive,5,Neutral,3,Positive,5
+sample_11,3,"Я многие блюда там пробовал, всё понравилось. ",Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,5,Positive,4,Positive,5,Positive,5,Positive,5
+sample_12,0,"Кто сказал, что это роды? Почему она без спец. одежды?",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Positive,4,Positive,5,Neutral,3,Positive,5
+sample_12,1,Может ещё костюм химзащиты надевать?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_12,2,Ну как минимум халат и бахилы было бы логично,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_12,3,Может ещё зеленкой обмазаться? В чем логичность то? Она же туда не лезет...,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_13,0,Да ну и что. У него борода/небритость зарешала бы!,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_13,1,А была небритость? Что-то у тебя фантазия разыгралась...,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Negative,1
+sample_13,2,"Пашка, ну кинул бы в него мяч и убежал, хорош, че ты докапываешься..",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_13,3,Я против домыслов . ,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_13,4,Да ты толерантен!! Красавчик!,Neutral,3,Positive,5,Positive,5,Positive,5,Positive,5,Positive,5,Positive,5,Positive,5,Positive,5
+sample_14,0,"Судя по автозамене, вы из Беларуси?",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_14,1,"Не, но картофан и моя тема тоже. ",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_14,2,С такими надбавками только его и есть🤗,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Positive,5,Neutral,3
+sample_14,3,"и макарошки же! Как та мадама советовала, которой я имя не помню",Neutral,3,Negative,1,Negative,1,Positive,5,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_15,0,"Угуг. Как то психолог спросил хвалили ли меня. Я поржал. Ахах, меня - хвалить? Ахах. Плак плак. ",Neutral,3,Negative,1,Positive,5,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_15,1,"Вы еще скажите, что у меня мнение свое есть...и я пойду спрошу у мамы, можно ли над вами посмеяться. ",Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Neutral,3,Negative,1,Neutral,3
+sample_15,2,ну хотябы не у жены,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_15,3,Зачем мне жена?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Positive,4,Neutral,3,Positive,5,Positive,5
+sample_16,0,"Требовать вспомнить что-то многолетней давности от человека с диагнозом склероз... Давай, придумай что-нибудь еще тупее. ",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_16,1,"почитай что такое рассеянный склероз и, заодно, что такое дебильность",Neutral,3,Negative,1,Negative,1,Negative,1,Positive,5,Negative,2,Neutral,3,Neutral,3,Neutral,3
+sample_16,2,"Изучил инфу про болячки автора темы, щас пойду почитаю про твои. ",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_16,3,"изучатель хренов, хоть понял чем РС от склероза отличается ?",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_17,0,Привет тебе из славного района ВАИ=. ,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,5,Positive,4,Neutral,3,Negative,1,Neutral,3
+sample_17,1,"И тебе привет из славного района ВАИ, я с Туполева, а ты?",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_17,2,Туполева 15б...,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_17,3,Туполева 7...,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_17,4,"Ну почти соседи. Знакомы едва ли (я барышня, 31 год. , но ВАИ, как известно, та ещё деревня=. ",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Neutral,3,Negative,1
+sample_17,5,"А мне 36 и я парень... да деревня это точно... Ты коренная? я с детства тут, учился в 30-ке",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_17,6,"Офигеть теперь вообще. Да, коренная. Ну почти... С шести лет на ваях живу. ",Neutral,3,Neutral,3,Positive,5,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_18,0,Эт факт..Религия это бизнес чаще всего,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_18,1,"Для кого бизнес, а для кого иллюзия надежды",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_18,2,"А этими иллюзиями торгуют, так что бизнес на иллюзиях=. ",Neutral,3,Neutral,3,Negative,1,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_18,3,Сейчас бы воздух продавать..,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Negative,1
+sample_19,0,"КАК ВЫ НАХУЙ БЕСИТЕ!!! не нравится вам смотреть на это, сука, внесите теги жесть мясо кишки кровь в игнор и не ебите мозги другим",Neutral,3,Negative,1,Negative,1,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_19,1,Чтобы на это не смотреть надо эти тэги внести в игнор? А сработает?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Negative,1
+sample_19,2,"у меня тег аниме в игноре, сработало",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Positive,5,Neutral,3
+sample_19,3,А есть тег выключить психованных с психованными комментариями?. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_20,0,Ну тогда и Бумер ..,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_20,1,Всё никак не пойму что в нём хорошего. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Negative,1,Negative,1
+sample_20,2,"Я сам не смотрел, но рекомендовали мне всегда его мужики, похожие на тех, что на картинке выше..",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_20,3,А я смотрел. И да. Действительно это фильм для таких вот мужиков и им сочувствующих. Не стал бы рекомендовать к просмотру:. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Positive,5,Negative,1,Positive,5
+sample_21,0,Интересная тема медицина - иногда напоминает некромантию. ,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_21,1,"Только работает. А некромантия, насколько я знаю, нет. Или есть свидетельства обратного?",Neutral,3,Neutral,3,Negative,1,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Positive,5
+sample_21,2,"Без понятия, у меня в знакомых - максимум - сатанисты. ",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Negative,1
+sample_21,3,И среди них нет колдунов?. Я когда-то знал одну ведьму. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Positive,5,Negative,1,Positive,5
+sample_21,4,"Всякие есть. Некромантов нет. Я сама типо правнучка ведьмы, но мозги достались сугубо рациональные. ",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_22,0,Валентина Терешкова предложила обнулить президентские сроки. А обнулились мозги борцов с режимом,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_22,1,"Да не Терешкова это предложила! Она всего лишь озвучила. Те правки, что ввели в Конституцию, уже автоматически обнуляют президентский срок. ",Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Neutral,3,Negative,1,Neutral,3,Positive,5
+sample_22,2,Лучше бы кредиты всем обнулили. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_22,3,Вы на святое-то не замахивайтесь!,Neutral,3,Negative,1,Positive,5,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_23,0,"Прочитал «Сталкер» Скоро новая часть, все мысли о нем :/",Negative,1,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_23,1,Скоро забыл в кавычки загань,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_23,2,Извиняюсь за свою оплошность,Neutral,3,Negative,1,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_23,3,и это низменное извиняюсь поправить! благородные доны так не говорят. ,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Negative,1
+sample_24,0,"Именно по этому, мне больше нравиться в этом плане США. ",Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,5,Positive,4,Positive,5,Positive,5,Positive,5
+sample_24,1,"Ага, то то в последнее время довольные американцы копов отстреливают. ",Neutral,3,Neutral,3,Negative,1,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_24,2,Американцы или кучка blmовских расистов?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_24,3,А они не американцы? В Фергюсоне бурление было довольно масштабным,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_25,0,"думаю, что могу. ",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_25,1,а в каком городе проживаете?,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_25,2,Кемерово,Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_25,3,"эхх, далеко((",Neutral,3,Negative,1,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_25,4,"вы подождите, пока сделаю свой ноут и выложу длинопост с новой работой. Может и расстояние покажется несущественным..",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Negative,1,Neutral,3
+sample_26,0,Где ты старый добрый гарлем шейк...,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_26,1,Единственный танец который я могла танцевать :с,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Negative,1,Neutral,3,Positive,5
+sample_26,2,"ну хз, я в свое время разрывал танцпол танцем маленьких утят",Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_26,3,"...разрывал напополам. И все расходились от тебя, как от прокаженного. ",Neutral,3,Neutral,3,Negative,1,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_27,0,Ей же лет 13 О. О,Neutral,3,Neutral,3,Neutral,3,Neutral,3,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_27,1,Значительно больше . А плоха это не ошибка а такой стиль письма . ,Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_27,2,"Ну факт остаётся фактом стиль письма у неё, поступки и реакция как у 12-летней девочки",Neutral,3,Negative,1,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_27,3,"Это не возрасты, а стиль жизни. Как говориться - такое не лечится. ",Neutral,3,Negative,1,Neutral,3,Positive,5,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_28,0,"Там регулярной армии хватит, чтобы отвадить любые поползновения в сторону нашего полуострова. ",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_28,1,"Причём хватит уже того, что есть в самом Крыму. ",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Negative,2,Negative,1,Neutral,3,Negative,1
+sample_28,2,"Да, там вполне самодостаточная группа войск. На руинцев их хватит с лихвой. ",Neutral,3,Neutral,3,Neutral,3,Positive,5,Positive,5,Positive,4,Neutral,3,Neutral,3,Neutral,3
+sample_28,3,Это еще руинцев найти нужно будет. В любом случае военный действия это плохо. Это только рассуждать возле монитора хорошо как оно стрелять и убивать. ,Neutral,3,Negative,1,Negative,1,Negative,1,Positive,5,Negative,2,Neutral,3,Neutral,3,Neutral,3
+sample_29,0,А типа в указанных районах ввели режим АТО или как?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_29,1,Типа вдоль границы шныряет более чем дохуя народу с оружием. Причём отдельные из шныряющих не отличаются адекватностью. А по сути твой пост - вброс. ,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_29,2,"Мой пост вопрос, по сути вопрос, а не вброс . ",Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3
+sample_29,3,Российские десантники заблудились.....Охуенный вопрос. Знак вопроса теперь так . выглядит?,Neutral,3,Neutral,3,Neutral,3,Negative,1,Positive,5,Neutral,3,Neutral,3,Neutral,3,Neutral,3

@@ -1,0 +1,6 @@
+{
+  "input_file": "D:/Documents/Visual Studio Code/MainFolder/Diplom/test_with_sentiment.jsonl",
+  "output_dir": "answer\\dialogs_test_with_sentiment_20260928_192653",
+  "is_dialog": true,
+  "max_rows": 10
+}

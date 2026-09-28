@@ -26,40 +26,37 @@ plt.rcParams['font.family'] = 'DejaVu Sans'
 def find_result_file():
     """Автоматический поиск файла с результатами"""
     answer_dir = "answer"
-    
+
     if not os.path.exists(answer_dir):
         print("[X] Folder 'answer' does not exist")
         return None
-    
-    # Ищем ВСЕ CSV файлы с результатами - и латиницу, и кириллицу
+
     patterns = [
+        # Сначала — каноничные имена (отзывы и диалоги)
         os.path.join(answer_dir, "**", "отзывы(результат работы).csv"),
-        os.path.join(answer_dir, "**", "otzyvy(result).csv"),
+        os.path.join(answer_dir, "**", "dialogs_summary_*.csv"),
+        os.path.join(answer_dir, "**", "dialogs_analysis_result.csv"),
         os.path.join(answer_dir, "отзывы(результат работы).csv"),
-        os.path.join(answer_dir, "otzyvy(result).csv"),
     ]
-    
+
     all_files = []
     for pattern in patterns:
-        found = glob.glob(pattern, recursive=True)
-        all_files.extend(found)
-    
+        all_files.extend(glob.glob(pattern, recursive=True))
+
     if all_files:
-        # Убираем дубликаты и сортируем по времени
         all_files = list(set(all_files))
         all_files.sort(key=os.path.getctime, reverse=True)
         latest_file = all_files[0]
         print(f"[OK] Found results file: {latest_file}")
         return latest_file
-    
-    # Если ничего не нашли по шаблонам, ищем все CSV в answer/
+
     all_csvs = glob.glob(os.path.join(answer_dir, "**", "*.csv"), recursive=True)
     if all_csvs:
         all_csvs.sort(key=os.path.getctime, reverse=True)
         latest_file = all_csvs[0]
         print(f"[OK] Found CSV file: {latest_file}")
         return latest_file
-    
+
     print("[X] No result CSV files found in 'answer' folder")
     return None
 
@@ -95,6 +92,12 @@ def load_and_prepare_data(file_path=None):
     if existing_cols:
         print(df[existing_cols].head())
     
+    # Диалоговый формат: нет rating, но есть actual_sentiment
+    if 'rating' not in df.columns and 'actual_sentiment' in df.columns:
+        sentiment_to_rating = {'Positive': 5, 'Neutral': 3, 'Negative': 1}
+        df['rating'] = df['actual_sentiment'].map(sentiment_to_rating)
+        print("[OK] Created 'rating' from 'actual_sentiment'")
+
     # Проверяем наличие столбца rating
     if 'rating' not in df.columns:
         print("[X] No 'rating' column")
@@ -179,9 +182,19 @@ def load_and_prepare_data(file_path=None):
         df_clean['ensemble_score'] = df_clean['ensemble_sentiment'].map(sentiment_to_score)
         df_clean['ensemble_score_for_analysis'] = df_clean['ensemble_score']
         print("[OK] Created ensemble_score from ensemble_sentiment")
-    
+           
     if 'ensemble_score' not in df_clean.columns and 'ensemble_score_for_analysis' in df_clean.columns:
         df_clean['ensemble_score'] = df_clean['ensemble_score_for_analysis'].round().clip(1, 5)
+
+    # Диалоговый формат: есть ensemble_score_rounded, но нет ensemble_score
+    if 'ensemble_score' not in df_clean.columns and 'ensemble_score_rounded' in df_clean.columns:
+        df_clean['ensemble_score'] = df_clean['ensemble_score_rounded']
+        print("[OK] Used ensemble_score_rounded as ensemble_score")
+
+    # Диалоговый формат: есть dialog_sentiment, но нет ensemble_sentiment
+    if 'ensemble_sentiment' not in df_clean.columns and 'dialog_sentiment' in df_clean.columns:
+        df_clean['ensemble_sentiment'] = df_clean['dialog_sentiment']
+        print("[OK] Used dialog_sentiment as ensemble_sentiment")
     
     print(f"\n[OK] Loaded {len(df_clean)} records with valid ratings")
     score_cols = [col for col in df_clean.columns if col.endswith('_score')]
