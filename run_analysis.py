@@ -3,6 +3,8 @@ import json
 import os
 import asyncio
 
+import pandas as pd 
+
 # Настройка кодировки для Windows
 if sys.platform == 'win32':
     import io

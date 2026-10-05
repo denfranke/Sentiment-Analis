@@ -416,11 +416,16 @@
 
 from flair.data import Corpus, Sentence
 from flair.datasets import CSVClassificationCorpus
-from flair.embeddings import FlairEmbeddings, DocumentRNNEmbeddings
+from flair.embeddings import TransformerDocumentEmbeddings # FlairEmbeddings, DocumentRNNEmbeddings
 from flair.models import TextClassifier
 from flair.trainers import ModelTrainer
+#from flair.trainers.plugins import AnnealingPlugin
+
 import torch
 from torch.utils.data import Subset
+
+
+
 
 # 1. Укажите папку с данными
 data_folder = 'data/rusentiment-flair-model/files'
@@ -435,7 +440,7 @@ corpus: Corpus = CSVClassificationCorpus(
     column_name_map,
     label_type='sentiment',
     skip_header=False,
-    delimiter=',',
+    delimiter='\t',
     encoding='utf-8'
 )
 
@@ -494,15 +499,20 @@ print(f"Размер словаря: {len(label_dict)}")
 
 # 7. Создаем эмбеддинги
 print("\nЗагрузка эмбеддингов...")
-flair_embeddings_forward = FlairEmbeddings('multi-forward')
-flair_embeddings_backward = FlairEmbeddings('multi-backward')
+# flair_embeddings_forward = FlairEmbeddings('multi-forward')
+# flair_embeddings_backward = FlairEmbeddings('multi-backward')
 
-document_embeddings = DocumentRNNEmbeddings(
-    embeddings=[flair_embeddings_forward, flair_embeddings_backward],
-    hidden_size=128,
-    reproject_words=True,
-    reproject_words_dimension=64,
-    bidirectional=True
+# document_embeddings = DocumentRNNEmbeddings(
+#     embeddings=[flair_embeddings_forward, flair_embeddings_backward],
+#     hidden_size=128,
+#     reproject_words=True,
+#     reproject_words_dimension=64,
+#     bidirectional=True
+# )
+
+document_embeddings = TransformerDocumentEmbeddings(
+    'cointegrated/rubert-tiny2',  # или 'DeepPavlov/rubert-base-cased'
+    fine_tune=True
 )
 
 # 8. Создаем классификатор
@@ -536,9 +546,9 @@ trainer = ModelTrainer(classifier, filtered_corpus)
 '''запуск lost= 1.09 55.5%'''
 trainer.train(
     base_path='data/rusentiment-flair-model',
-    learning_rate=1e-4,  # Маленькая LR вместо 0.1
-    mini_batch_size=8,
-    max_epochs=5,
+    learning_rate=1e-4, 
+    mini_batch_size=16,
+    max_epochs=7,
     
     # AdamW оптимизатор (лучше для сходимости)
     optimizer=torch.optim.AdamW,
@@ -548,6 +558,11 @@ trainer.train(
     embeddings_storage_mode='cpu',
     shuffle=True,
     save_final_model=True,
+
+    # anneal_factor=0.5,
+    # patience=3,
+    # min_learning_rate=1e-6,
+    # anneal_with_restarts=True
 )
 
 print("\n✅ Обучение завершено!")

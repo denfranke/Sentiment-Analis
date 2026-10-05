@@ -1,0 +1,8 @@
+{
+  "input_file": "D:/Documents/Visual Studio Code/MainFolder/Diplom/data/15k_phone.csv",
+  "output_dir": "answer\\15k_phone_20261003_163239",
+  "text_column": "text",
+  "rating_column": "label",
+  "use_rating": true,
+  "max_rows": 1000
+}

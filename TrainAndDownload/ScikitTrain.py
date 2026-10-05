@@ -3,569 +3,584 @@
 
 """
 Программа для обучения моделей анализа тональности русских текстов
-с использованием scikit-learn и pymorphy3
+с использованием scikit-learn и pymorphy3.
+
+Модели: logistic_regression, svm_linear, random_forest
 """
 
-import pandas as pd
-import numpy as np
-import joblib
 import os
+import re
 import json
-from datetime import datetime
+import logging
+import warnings
+from datetime import datetime, timezone
+from functools import lru_cache
+from multiprocessing import Pool, cpu_count
+
+import numpy as np
+import pandas as pd
+import joblib
+import nltk
+import pymorphy3
+
+from nltk.corpus import stopwords
+
+from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import LinearSVC, SVC
+from sklearn.svm import LinearSVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import classification_report, accuracy_score, f1_score
-import string
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-import pymorphy3
-import warnings
+from sklearn.model_selection import (
+    train_test_split,
+    GridSearchCV,
+    RandomizedSearchCV,
+    StratifiedKFold,
+    cross_val_score,
+)
+from sklearn.metrics import (
+    classification_report,
+    accuracy_score,
+    f1_score,
+)
+from sklearn.utils.class_weight import compute_class_weight
+
 warnings.filterwarnings('ignore')
 
-# ==================== ПАРАМЕТРЫ КОНФИГУРАЦИИ ====================
-# Измените эти параметры для настройки обучения
 
-# Параметры данных
+# ==================== ЛОГИРОВАНИЕ ====================
+
+def setup_logging(log_dir: str = 'logs') -> logging.Logger:
+    os.makedirs(log_dir, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    log_path = os.path.join(log_dir, f'train_{ts}.log')
+
+    logger = logging.getLogger('sentiment')
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+
+    fh = logging.FileHandler(log_path, encoding='utf-8')
+    fh.setFormatter(logging.Formatter('%(asctime)s | %(levelname)s | %(message)s'))
+
+    sh = logging.StreamHandler()
+    sh.setFormatter(logging.Formatter('%(message)s'))
+
+    logger.addHandler(fh)
+    logger.addHandler(sh)
+    return logger
+
+
+log = setup_logging()
+
+
+# ==================== КОНФИГУРАЦИЯ ====================
+
 DATA_CONFIG = {
-    # 'file_path': 'data/sentiment_dataset_merged_2.csv',  # Путь к файлу с данными
-    'file_path': 'data/sentiment_dataset_merged_2_shuffled.csv',
-    'text_column': 'text',                              # Колонка с текстами
-    'label_column': 'label',                             # Колонка с метками
-    'encoding': 'utf-8',                                 # Кодировка файла
-    'max_samples': None,                                 # Максимум записей (None = все)
-    'test_size': 0.2,                                    # Размер тестовой выборки
-    'random_state': 42,                                  # Random state
-    'sample_random': False ,                              # Случайная выборка
-    'nrows':300000
+    'file_path': 'data/sentiment_dataset_merged_3_shuffled.csv',
+    'text_column': 'text',
+    'label_column': 'label',
+    'encoding': 'utf-8',
+    'max_samples': None,
+    'test_size': 0.2,
+    'random_state': 42,
+    'sample_random': False,
+    'nrows': 500000,
 }
 
-# Параметры обучения
 TRAINING_CONFIG = {
-    'output_dir': 'models',                              # Директория для сохранения
-    'use_grid_search': False,                            # Использовать GridSearch
-    'models_to_train': [                                 # Модели для обучения
+    'output_dir': 'models',
+    'use_grid_search': False,
+    'use_cv_eval': True,
+    'cv_folds': 3,
+    'build_ensemble': False,       # ensemble отключён — оставляем только 3 модели
+    'models_to_train': [
         'logistic_regression',
-        'svm_linear',  # Отдельно линейный SVM
-        # 'svm_rbf',     # Отдельно RBF SVM        
-        'random_forest'
-    ]
+        'svm_linear',
+        'random_forest',
+    ],
 }
 
-# Параметры TF-IDF векторизации
+# Общий TF-IDF (для линейных моделей)
 TFIDF_CONFIG = {
-    'max_features': 10000,                               # Максимум признаков
-    'ngram_range': (1, 2),                               # Диапазон n-грамм
-    'min_df': 5,                                          # Минимальная частота документа
-    'max_df': 0.8,                                        # Максимальная частота документа
-    'sublinear_tf': True                                  # Логарифмическое масштабирование TF
+    'max_features': 50000,
+    'ngram_range': (1, 2),
+    'min_df': 3,
+    'max_df': 0.9,
+    'sublinear_tf': True,
+    'use_idf': True,
+    'smooth_idf': True,
+    'token_pattern': r'\w{2,}',
 }
 
-# Параметры моделей
-# Замените секцию MODELS_CONFIG для SVM на:
+# Отдельный TF-IDF для RandomForest — меньше признаков, только униграммы.
+# Деревья плохо работают с очень разреженными матрицами: 50k признаков
+# превращают обучение в часы и ухудшают качество из-за переобучения на шум.
+TFIDF_CONFIG_RF = {
+    'max_features': 5000,
+    'ngram_range': (1, 1),
+    'min_df': 5,
+    'max_df': 0.9,
+    'sublinear_tf': True,
+    'use_idf': True,
+    'smooth_idf': True,
+    'token_pattern': r'\w{2,}',
+}
 
 MODELS_CONFIG = {
     'logistic_regression': {
-        'C': 1.0,
-        'max_iter': 1000,
-        'solver': 'lbfgs',
-        'class_weight': 'balanced'
-    },
-    'svm_linear': {  # Отдельная модель для линейного SVM
-        'C': 1.0,
-        'loss': 'squared_hinge',  # Для LinearSVC
-        'class_weight': 'balanced',
-        'random_state': 42,
+        'C': 5.0,
         'max_iter': 2000,
-        'dual': False  # Для больших данных
-    },
-    'svm_rbf': {  # Отдельная модель для RBF SVM
-        'C': 1.0,
-        'kernel': 'rbf',
-        'gamma': 'scale',
-        'class_weight': 'balanced',
-        'probability': False,  # Отключаем для скорости
-        'random_state': 42,
-        'cache_size': 1000  # Кэш для ускорения
-    },
-    'random_forest': {
-        'n_estimators': 100,
-        'max_depth': None,
-        'min_samples_split': 2,
-        'min_samples_leaf': 1,
+        'solver': 'lbfgs',
         'class_weight': 'balanced',
         'n_jobs': -1,
-        'random_state': 42
-    }
+    },
+    'svm_linear': {
+        'C': 1.0,
+        'loss': 'squared_hinge',
+        'class_weight': 'balanced',
+        'random_state': 42,
+        'max_iter': 5000,
+        'dual': 'auto',
+        'tol': 1e-3,
+    },
+    'random_forest': {
+        'n_estimators': 300,
+        'max_depth': None,
+        'min_samples_split': 5,
+        'min_samples_leaf': 2,
+        'max_features': 'sqrt',
+        'class_weight': 'balanced_subsample',
+        'n_jobs': -1,
+        'random_state': 42,
+        'verbose': 0,
+    },
 }
 
-
-# Параметры GridSearch (используются если use_grid_search = True)
 GRID_SEARCH_CONFIG = {
     'cv_folds': 3,
-    'scoring': 'f1_weighted',
+    'scoring': 'f1_macro',
     'n_jobs': -1,
-    'verbose': 1,
-    
-    # Сетки параметров для каждой модели
+    'verbose': 2,
+    'use_randomized': True,
+    'n_iter': 15,
+
     'logistic_regression_params': {
-        'tfidf__max_features': [5000, 10000, 15000],
+        'tfidf__max_features': [30000, 50000],
         'tfidf__ngram_range': [(1, 1), (1, 2)],
-        'classifier__C': [0.1, 1.0, 10.0],
-        'classifier__solver': ['lbfgs', 'liblinear']
+        'tfidf__min_df': [2, 3, 5],
+        'classifier__C': [0.5, 1.0, 5.0, 10.0],
     },
-    'svm_params': {                                       # Объединенные параметры для SVM
-        'tfidf__max_features': [5000, 10000],
+    'svm_linear_params': {
+        'tfidf__max_features': [30000, 50000],
         'tfidf__ngram_range': [(1, 1), (1, 2)],
-        'classifier__C': [0.1, 1.0, 10.0],
-        'classifier__kernel': ['linear', 'rbf'],          # Выбор между linear и rbf
-        'classifier__gamma': ['scale', 'auto', 0.1, 1.0]  # Для RBF ядра
+        'classifier__C': [0.1, 0.5, 1.0, 5.0],
     },
     'random_forest_params': {
-        'tfidf__max_features': [5000, 10000],
-        'classifier__n_estimators': [50, 100, 200],
-        'classifier__max_depth': [None, 20, 30],
-        'classifier__min_samples_split': [2, 5]
-    }
+        # Для RF — маленький TF-IDF, иначе обучение будет часами
+        'tfidf__max_features': [3000, 5000, 10000],
+        'tfidf__ngram_range': [(1, 1)],
+        'classifier__n_estimators': [200, 300, 500],
+        'classifier__max_depth': [None, 50, 100],
+        'classifier__min_samples_leaf': [1, 2, 5],
+    },
 }
 
-# ==================== КОНЕЦ ПАРАМЕТРОВ ====================
 
+# ==================== NLTK ====================
 
-# Загрузка ресурсов NLTK
 def download_nltk_resources():
-    """Загрузка необходимых ресурсов NLTK"""
     resources = [
         ('tokenizers/punkt', 'punkt'),
         ('corpora/stopwords', 'stopwords'),
-        ('tokenizers/punkt_tab', 'punkt_tab')
+        ('tokenizers/punkt_tab', 'punkt_tab'),
     ]
-    
     for resource_path, resource_name in resources:
         try:
             nltk.data.find(resource_path)
         except LookupError:
-            print(f"Загрузка ресурса NLTK: {resource_name}")
-            nltk.download(resource_name)
+            log.info(f"Загрузка ресурса NLTK: {resource_name}")
+            try:
+                nltk.download(resource_name, quiet=True)
+            except Exception as e:
+                log.warning(f"Не удалось загрузить {resource_name}: {e}")
+
+
+# ==================== ПРЕПРОЦЕССИНГ ====================
+
+_URL_RE = re.compile(r'https?://\S+|www\.\S+')
+_MENTION_RE = re.compile(r'@\w+')
+_HASHTAG_RE = re.compile(r'#\w+')
+_PUNCT_RE = re.compile(r'[^\w\s]', re.UNICODE)
+_DIGIT_RE = re.compile(r'\b\d+\b')
+_SPACE_RE = re.compile(r'\s+')
+
+
+@lru_cache(maxsize=200_000)
+def _cached_lemma(morph, word):
+    return morph.parse(word)[0].normal_form
+
+
+def _preprocess_with(morph, stop_words, text):
+    if not isinstance(text, str) or not text.strip():
+        return ""
+
+    text = text.lower()
+    text = _URL_RE.sub(' ', text)
+    text = _MENTION_RE.sub(' ', text)
+    text = _HASHTAG_RE.sub(' ', text)
+    text = _DIGIT_RE.sub(' ', text)
+    text = _PUNCT_RE.sub(' ', text)
+    text = _SPACE_RE.sub(' ', text).strip()
+
+    tokens = []
+    for token in text.split():
+        if len(token) <= 1 or token in stop_words:
+            continue
+        tokens.append(_cached_lemma(morph, token))
+    return ' '.join(tokens)
+
+
+def _lemmatize_worker(args):
+    morph, stop_words, text = args
+    return _preprocess_with(morph, stop_words, text)
 
 
 class TextPreprocessor:
-    """
-    Класс для предобработки русских текстов
-    """
-    
-    def __init__(self):
-        """Инициализация препроцессора"""
-        self.morph = None
-        self.stop_words = None
-        self._initialize_resources()
-        
-        # Список символов для удаления
-        self.punctuation_chars = set(string.punctuation + '0123456789')
-        self.url_indicators = ['http', 'https', 'www', '.com', '.ru', '.org', '.net']
-        self.mention_indicators = ['@']
-        self.hashtag_indicators = ['#']
-    
-    def _initialize_resources(self):
-        """Инициализация морфологического анализатора и стоп-слов"""
-        try:
-            self.morph = pymorphy3.MorphAnalyzer()
-            self.stop_words = set(stopwords.words('russian'))
-            print("✓ Морфологический анализатор (pymorphy3) и стоп-слова загружены")
-        except Exception as e:
-            print(f"⚠ Предупреждение: Не удалось загрузить pymorphy3: {e}")
-            print("  Предобработка будет работать в ограниченном режиме")
-            self.morph = None
-            self.stop_words = set()
-    
-    def preprocess(self, text):
-        """
-        Предобработка русского текста
-        
-        Args:
-            text: Исходный текст
-            
-        Returns:
-            Очищенный и лемматизированный текст
-        """
-        if not isinstance(text, str) or not text.strip():
-            return ""
-        
-        # Приведение к нижнему регистру
-        text = text.lower()
-        
-        # Удаление URL, упоминаний, хештегов
-        words = text.split()
-        filtered_words = []
-        for word in words:
-            # Пропускаем URL
-            if any(indicator in word for indicator in self.url_indicators):
-                continue
-            # Пропускаем @упоминания
-            if any(word.startswith(indicator) for indicator in self.mention_indicators):
-                continue
-            # Пропускаем #хештеги
-            if any(word.startswith(indicator) for indicator in self.hashtag_indicators):
-                continue
-            filtered_words.append(word)
-        text = ' '.join(filtered_words)
-        
-        # Удаление пунктуации и цифр
-        text = ''.join(char for char in text if char not in self.punctuation_chars)
-        
-        # Нормализация пробелов
-        text = ' '.join(text.split())
-        
-        # Лемматизация через pymorphy3
-        if self.morph is not None and text.strip():
-            try:
-                # Токенизация
-                try:
-                    tokens = word_tokenize(text, language='russian')
-                except:
-                    tokens = text.split()
-                
-                lemmatized_tokens = []
-                for token in tokens:
-                    if token and token not in self.stop_words and len(token) > 2:
-                        try:
-                            lemma = self.morph.parse(token)[0].normal_form
-                            lemmatized_tokens.append(lemma)
-                        except:
-                            if len(token) > 2:
-                                lemmatized_tokens.append(token)
-                
-                return ' '.join(lemmatized_tokens)
-            except Exception as e:
-                return text
-        else:
-            return text
-    
-    def preprocess_batch(self, texts, verbose=True):
-        """
-        Пакетная предобработка текстов
-        
-        Args:
-            texts: Список текстов
-            verbose: Выводить прогресс
-            
-        Returns:
-            Список обработанных текстов
-        """
-        processed = []
-        total = len(texts)
-        
-        for i, text in enumerate(texts):
-            if verbose and i > 0 and i % 1000 == 0:
-                print(f"  Обработано {i}/{total} текстов")
-            processed.append(self.preprocess(text))
-        
-        if verbose:
-            print(f"  Обработано {total}/{total} текстов")
-        
-        return processed
+    def __init__(self, use_multiprocessing=True, n_jobs=None):
+        self.morph = pymorphy3.MorphAnalyzer()
+        self.stop_words = set(stopwords.words('russian'))
+        self.stop_words -= {'не', 'ни', 'нет', 'без', 'никогда', 'ничего'}
 
+        self.use_multiprocessing = use_multiprocessing
+        self.n_jobs = n_jobs or max(1, cpu_count() - 1)
+
+    def preprocess(self, text):
+        return _preprocess_with(self.morph, self.stop_words, text)
+
+    def preprocess_batch(self, texts, verbose=True):
+        texts = list(texts)
+        if self.use_multiprocessing and len(texts) > 5000:
+            try:
+                with Pool(self.n_jobs) as pool:
+                    args = [(self.morph, self.stop_words, t) for t in texts]
+                    return pool.map(_lemmatize_worker, args, chunksize=500)
+            except Exception as e:
+                log.warning(f"Multiprocessing не удалось ({e}), fallback")
+        return [self.preprocess(t) for t in texts]
+
+
+class PreprocessorTransformer(BaseEstimator, TransformerMixin):
+    """Трансформер для встраивания в Pipeline — сохраняется вместе с моделью."""
+
+    def __init__(self, use_multiprocessing=True, n_jobs=None):
+        self.use_multiprocessing = use_multiprocessing
+        self.n_jobs = n_jobs
+        self._preprocessor = None
+
+    def fit(self, X, y=None):
+        self._preprocessor = TextPreprocessor(
+            use_multiprocessing=self.use_multiprocessing,
+            n_jobs=self.n_jobs,
+        )
+        return self
+
+    def transform(self, X):
+        if self._preprocessor is None:
+            self._preprocessor = TextPreprocessor(
+                use_multiprocessing=self.use_multiprocessing,
+                n_jobs=self.n_jobs,
+            )
+        return self._preprocessor.preprocess_batch(list(X), verbose=False)
+
+
+# ==================== ТРЕНЕР ====================
 
 class SklearnModelTrainer:
-    """
-    Класс для обучения моделей scikit-learn
-    """
-    
+
     def __init__(self, output_dir='models', random_state=42):
-        """
-        Инициализация тренера моделей
-        
-        Args:
-            output_dir: Директория для сохранения моделей
-            random_state: Random state для воспроизводимости
-        """
         self.output_dir = output_dir
         self.random_state = random_state
-        self.preprocessor = TextPreprocessor()
         self.models = {}
         self.results = {}
-        
-        # Создание директории для моделей
+        self.best_params = {}
+
         os.makedirs(output_dir, exist_ok=True)
-        
-        # Создание директории для результатов
         self.results_dir = os.path.join(output_dir, 'results')
         os.makedirs(self.results_dir, exist_ok=True)
-    
+
     def prepare_labels(self, y):
-        """
-        Подготовка меток для обучения
-        
-        Args:
-            y: Исходные метки
-            
-        Returns:
-            tuple: (числовые метки, mapping словарь, список названий классов)
-        """
-        unique_labels = np.unique(y)
-        unique_labels = sorted(unique_labels)  # Сортируем для консистентности
-        
-        # Создаем отображение строковых меток в числа
+        unique_labels = sorted(np.unique(y))
         mapping = {label: i for i, label in enumerate(unique_labels)}
         y_numeric = np.array([mapping[label] for label in y])
-        
-        # Список названий классов для отчетов
         target_names = list(unique_labels)
-        
-        print(f"\nНайдены метки: {unique_labels}")
-        print(f"Преобразованы в числа: {mapping}")
-        
+
+        log.info(f"Найдены метки: {unique_labels}")
+        log.info(f"Преобразованы в числа: {mapping}")
         return y_numeric, mapping, target_names
-    
-    def create_model(self, model_type):
-        """
-        Создание модели и пайплайна на основе конфигурации
-        """
-        # Настройки TF-IDF из глобальной конфигурации
-        vectorizer = TfidfVectorizer(**TFIDF_CONFIG)
-        
-        # Выбор модели из глобальной конфигурации
+
+    # ---------- factory ----------
+
+    def _get_tfidf_config(self, model_type):
+        """Для RandomForest — уменьшенный TF-IDF."""
+        if model_type == 'random_forest':
+            return TFIDF_CONFIG_RF
+        return TFIDF_CONFIG
+
+    def _get_classifier(self, model_type):
         if model_type == 'logistic_regression':
-            params = MODELS_CONFIG['logistic_regression'].copy()
-            model = LogisticRegression(**params)
-            
-        elif model_type == 'svm_linear':
-            # Используем LinearSVC для линейного SVM (быстрее)
-            from sklearn.svm import LinearSVC
-            params = MODELS_CONFIG['svm_linear'].copy()
-            model = LinearSVC(**params)
-            
-        elif model_type == 'svm_rbf':
-            # Используем SVC с RBF ядром
-            params = MODELS_CONFIG['svm_rbf'].copy()
-            model = SVC(**params)
-            
-        elif model_type == 'random_forest':
-            params = MODELS_CONFIG['random_forest'].copy()
-            model = RandomForestClassifier(**params)
-            
-        else:
-            raise ValueError(f"Неподдерживаемый тип модели: {model_type}")
-        
-        # Создание пайплайна
-        pipeline = Pipeline([
+            return LogisticRegression(**MODELS_CONFIG['logistic_regression'])
+        if model_type == 'svm_linear':
+            return LinearSVC(**MODELS_CONFIG['svm_linear'])
+        if model_type == 'random_forest':
+            return RandomForestClassifier(**MODELS_CONFIG['random_forest'])
+        raise ValueError(f"Неподдерживаемый тип модели: {model_type}")
+
+    def create_model(self, model_type):
+        """Pipeline: preprocess -> tfidf -> classifier (для сохранения)."""
+        vectorizer = TfidfVectorizer(**self._get_tfidf_config(model_type))
+        clf = self._get_classifier(model_type)
+
+        return Pipeline([
+            ('preprocess', PreprocessorTransformer()),
             ('tfidf', vectorizer),
-            ('classifier', model)
+            ('classifier', clf),
         ])
-        
-        return pipeline
-    
-    def train_multiple_models(self, X_train, y_train, X_test, y_test, 
-                            label_mapping, target_names):
-        """
-        Обучение нескольких моделей и их сравнение
-        
-        Args:
-            X_train: Обучающие тексты
-            y_train: Обучающие метки
-            X_test: Тестовые тексты
-            y_test: Тестовые метки
-            label_mapping: Отображение меток
-            target_names: Названия классов
-            
-        Returns:
-            Словарь с обученными моделями и результатами
-        """
+
+    # ---------- training ----------
+
+    def train_multiple_models(self, X_train, y_train, X_test, y_test,
+                              label_mapping, target_names):
         models_to_train = TRAINING_CONFIG['models_to_train']
         use_grid_search = TRAINING_CONFIG['use_grid_search']
-        
-        # Предобработка всех текстов сразу
-        print("\nПредобработка всех текстов...")
-        print("Обучающая выборка:")
-        X_train_processed = self.preprocessor.preprocess_batch(X_train)
-        print("Тестовая выборка:")
-        X_test_processed = self.preprocessor.preprocess_batch(X_test)
-        
+        use_cv_eval = TRAINING_CONFIG.get('use_cv_eval', True)
+        cv_folds = TRAINING_CONFIG.get('cv_folds', 3)
+
+        # Один раз предобрабатываем тексты — ускоряет CV и GridSearch
+        log.info("\nПредобработка текстов (один раз)...")
+        pre = TextPreprocessor()
+        X_train_p = pre.preprocess_batch(X_train)
+        X_test_p = pre.preprocess_batch(X_test)
+        log.info(f"  Готово: train={len(X_train_p)}, test={len(X_test_p)}")
+
         for model_type in models_to_train:
-            print(f"\n{'='*60}")
-            print(f"Обучение модели: {model_type}")
-            print('='*60)
-            
-            # Создание модели
+            log.info("\n" + "=" * 60)
+            log.info(f"Обучение модели: {model_type}")
+            log.info("=" * 60)
+
+            vectorizer = TfidfVectorizer(**self._get_tfidf_config(model_type))
+            clf = self._get_classifier(model_type)
+
+            pipeline = Pipeline([
+                ('tfidf', vectorizer),
+                ('classifier', clf),
+            ])
+
+            best_params = None
+
+            # --- Grid / Randomized Search ---
             if use_grid_search:
-                # Получение параметров для GridSearch
-                param_grid_key = f"{model_type}_params"
-                if param_grid_key in GRID_SEARCH_CONFIG:
-                    param_grid = GRID_SEARCH_CONFIG[param_grid_key]
-                    
-                    pipeline = self.create_model(model_type)
-                    grid_search = GridSearchCV(
-                        pipeline, 
-                        param_grid, 
-                        cv=GRID_SEARCH_CONFIG['cv_folds'],
-                        scoring=GRID_SEARCH_CONFIG['scoring'],
-                        n_jobs=GRID_SEARCH_CONFIG['n_jobs'],
-                        verbose=GRID_SEARCH_CONFIG['verbose']
-                    )
-                    grid_search.fit(X_train_processed, y_train)
-                    
-                    pipeline = grid_search.best_estimator_
-                    print(f"Лучшие параметры: {grid_search.best_params_}")
-                    print(f"Лучшая CV оценка: {grid_search.best_score_:.4f}")
+                key = f"{model_type}_params"
+                if key in GRID_SEARCH_CONFIG:
+                    param_grid = GRID_SEARCH_CONFIG[key]
+                    cv = GRID_SEARCH_CONFIG['cv_folds']
+                    scoring = GRID_SEARCH_CONFIG['scoring']
+
+                    if GRID_SEARCH_CONFIG.get('use_randomized', True):
+                        search = RandomizedSearchCV(
+                            pipeline,
+                            param_distributions=param_grid,
+                            n_iter=GRID_SEARCH_CONFIG['n_iter'],
+                            cv=cv, scoring=scoring,
+                            n_jobs=GRID_SEARCH_CONFIG['n_jobs'],
+                            verbose=GRID_SEARCH_CONFIG['verbose'],
+                            random_state=self.random_state,
+                            refit=True,
+                        )
+                    else:
+                        search = GridSearchCV(
+                            pipeline, param_grid=param_grid,
+                            cv=cv, scoring=scoring,
+                            n_jobs=GRID_SEARCH_CONFIG['n_jobs'],
+                            verbose=GRID_SEARCH_CONFIG['verbose'],
+                            refit=True,
+                        )
+                    search.fit(X_train_p, y_train)
+                    pipeline = search.best_estimator_
+                    best_params = search.best_params_
+                    log.info(f"Лучшие параметры: {best_params}")
+                    log.info(f"Лучшая CV-оценка ({scoring}): {search.best_score_:.4f}")
                 else:
-                    print(f"Предупреждение: Нет параметров GridSearch для {model_type}")
-                    pipeline = self.create_model(model_type)
-                    pipeline.fit(X_train_processed, y_train)
+                    log.warning(f"Нет параметров поиска для {model_type}")
+                    pipeline.fit(X_train_p, y_train)
             else:
-                # Обучение с параметрами по умолчанию
-                pipeline = self.create_model(model_type)
-                pipeline.fit(X_train_processed, y_train)
-            
-            # Оценка на тестовой выборке
-            y_pred = pipeline.predict(X_test_processed)
-            
-            # Метрики
+                pipeline.fit(X_train_p, y_train)
+
+            # --- Кросс-валидация (честная оценка) ---
+            cv_mean = cv_std = None
+            if use_cv_eval:
+                try:
+                    skf = StratifiedKFold(n_splits=cv_folds, shuffle=True,
+                                          random_state=self.random_state)
+                    cv_scores = cross_val_score(
+                        clone(pipeline), X_train_p, y_train,
+                        cv=skf, scoring='f1_macro',
+                        n_jobs=1, verbose=0,
+                    )
+                    cv_mean = float(cv_scores.mean())
+                    cv_std = float(cv_scores.std())
+                    log.info(f"CV f1_macro: {cv_mean:.4f} ± {cv_std:.4f}")
+                except Exception as e:
+                    log.warning(f"CV не удалось: {e}")
+
+            # --- Тест ---
+            y_pred = pipeline.predict(X_test_p)
             accuracy = accuracy_score(y_test, y_pred)
-            f1 = f1_score(y_test, y_pred, average='weighted')
-            
-            print(f"\nРезультаты на тестовой выборке:")
-            print(f"  Accuracy: {accuracy:.4f}")
-            print(f"  F1-score (weighted): {f1:.4f}")
-            
-            # Classification report
-            print("\nClassification Report:")
+            f1_macro = f1_score(y_test, y_pred, average='macro')
+            f1_weighted = f1_score(y_test, y_pred, average='weighted')
+
+            log.info("\nРезультаты на тестовой выборке:")
+            log.info(f"  Accuracy:      {accuracy:.4f}")
+            log.info(f"  F1 (macro):    {f1_macro:.4f}")
+            log.info(f"  F1 (weighted): {f1_weighted:.4f}")
+
             report = classification_report(
-                y_test, y_pred, 
-                target_names=target_names,
-                digits=4
+                y_test, y_pred, target_names=target_names, digits=4,
             )
-            print(report)
-            
-            # Сохранение модели
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            model_filename = f"{model_type}_model.joblib"
-            model_path = os.path.join(self.output_dir, model_filename)
-            
-            model_data = {
-                'pipeline': pipeline,
+            log.info("\nClassification Report:\n" + report)
+
+            # --- Сохранение (с препроцессором внутри) ---
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            model_path = os.path.join(self.output_dir, f"{model_type}_model.joblib")
+
+            full_pipeline = Pipeline([
+                ('preprocess', PreprocessorTransformer()),
+                ('tfidf', pipeline.named_steps['tfidf']),
+                ('classifier', pipeline.named_steps['classifier']),
+            ])
+            full_pipeline.named_steps['preprocess'].fit(X_train[:5])
+
+            joblib.dump({
+                'pipeline': full_pipeline,
                 'label_mapping': label_mapping,
                 'target_names': target_names,
                 'model_type': model_type,
                 'train_date': timestamp,
+                'best_params': best_params,
                 'metrics': {
-                    'accuracy': accuracy,
-                    'f1_score': f1
-                }
-            }
-            
-            joblib.dump(model_data, model_path)
-            print(f"Модель сохранена: {model_path}")
-            
-            # Сохранение результатов
+                    'accuracy': float(accuracy),
+                    'f1_macro': float(f1_macro),
+                    'f1_weighted': float(f1_weighted),
+                    'cv_f1_macro_mean': cv_mean,
+                    'cv_f1_macro_std': cv_std,
+                },
+            }, model_path)
+            log.info(f"Модель сохранена: {model_path}")
+
             self.models[model_type] = pipeline
             self.results[model_type] = {
-                'accuracy': accuracy,
-                'f1_score': f1,
+                'accuracy': float(accuracy),
+                'f1_macro': float(f1_macro),
+                'f1_weighted': float(f1_weighted),
+                'cv_f1_macro_mean': cv_mean,
+                'cv_f1_macro_std': cv_std,
                 'model_path': model_path,
                 'report': report,
-                'predictions': y_pred
+                'best_params': best_params,
+                'predictions': y_pred,
             }
-        
+            self.best_params[model_type] = best_params
+
         return self.models, self.results
-    
+
+    # ---------- reports ----------
+
     def save_results(self, filename=None):
-        """
-        Сохранение результатов сравнения моделей
-        
-        Args:
-            filename: Имя файла для сохранения
-        """
         if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"results_{timestamp}.json"
-        
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            filename = f"results_{ts}.json"
+
         results_path = os.path.join(self.results_dir, filename)
-        
-        # Подготовка данных для сохранения
+
         results_data = {}
-        for model_name, metrics in self.results.items():
-            results_data[model_name] = {
-                'accuracy': float(metrics['accuracy']),
-                'f1_score': float(metrics['f1_score']),
-                'model_path': metrics['model_path']
+        for name, m in self.results.items():
+            results_data[name] = {
+                'accuracy': m['accuracy'],
+                'f1_macro': m['f1_macro'],
+                'f1_weighted': m['f1_weighted'],
+                'cv_f1_macro_mean': m['cv_f1_macro_mean'],
+                'cv_f1_macro_std': m['cv_f1_macro_std'],
+                'model_path': m['model_path'],
+                'best_params': m['best_params'],
             }
-        
+
         with open(results_path, 'w', encoding='utf-8') as f:
-            json.dump(results_data, f, ensure_ascii=False, indent=2)
-        
-        print(f"\nРезультаты сохранены в {results_path}")
-        
-        # Создание текстового отчета
-        report_path = os.path.join(self.results_dir, f"report_{timestamp}.txt")
+            json.dump(results_data, f, ensure_ascii=False, indent=2, default=str)
+
+        log.info(f"\nРезультаты сохранены в {results_path}")
+
+        report_path = os.path.join(self.results_dir, f"report_{ts}.txt")
         with open(report_path, 'w', encoding='utf-8') as f:
-            f.write("="*60 + "\n")
+            f.write("=" * 60 + "\n")
             f.write("ОТЧЕТ ОБ ОБУЧЕНИИ МОДЕЛЕЙ\n")
-            f.write("="*60 + "\n\n")
-            
-            f.write(f"Дата обучения: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            f.write(f"Параметры данных:\n")
+            f.write("=" * 60 + "\n\n")
+            f.write(f"Дата: {datetime.now(timezone.utc).isoformat()}\n\n")
+            f.write("Параметры данных:\n")
             f.write(f"  Файл: {DATA_CONFIG['file_path']}\n")
             f.write(f"  Колонка текста: {DATA_CONFIG['text_column']}\n")
             f.write(f"  Колонка меток: {DATA_CONFIG['label_column']}\n")
-            f.write(f"  Тестовая выборка: {DATA_CONFIG['test_size']*100}%\n\n")
-            
+            f.write(f"  Тест: {DATA_CONFIG['test_size']*100}%\n\n")
+
             f.write("СРАВНЕНИЕ МОДЕЛЕЙ:\n")
-            f.write("-"*40 + "\n")
-            for model_name, metrics in self.results.items():
-                f.write(f"{model_name:20} | Accuracy: {metrics['accuracy']:.4f} | F1: {metrics['f1_score']:.4f}\n")
-            
-            f.write("\n\nДЕТАЛЬНЫЕ ОТЧЕТЫ:\n")
-            f.write("="*60 + "\n")
-            for model_name, metrics in self.results.items():
-                f.write(f"\nМодель: {model_name}\n")
-                f.write("-"*40 + "\n")
-                f.write(metrics['report'])
+            f.write("-" * 60 + "\n")
+            for name, m in self.results.items():
+                f.write(
+                    f"{name:20} | Acc: {m['accuracy']:.4f} | "
+                    f"F1_macro: {m['f1_macro']:.4f} | "
+                    f"F1_weighted: {m['f1_weighted']:.4f} | "
+                    f"CV: {m['cv_f1_macro_mean'] if m['cv_f1_macro_mean'] is not None else '—'}\n"
+                )
+
+            f.write("\n\nДЕТАЛЬНЫЕ ОТЧЕТЫ:\n" + "=" * 60 + "\n")
+            for name, m in self.results.items():
+                f.write(f"\nМодель: {name}\n")
+                f.write("-" * 40 + "\n")
+                if m.get('best_params'):
+                    f.write(f"Лучшие параметры: {m['best_params']}\n")
+                f.write(m['report'])
                 f.write("\n")
-        
-        print(f"Отчет сохранен в {report_path}")
-        
+
+        log.info(f"Отчет сохранен в {report_path}")
         return results_path, report_path
-    
+
     def print_summary(self):
-        """Вывод сводки по обученным моделям"""
-        print(f"\n{'='*60}")
-        print("СВОДКА ПО ОБУЧЕННЫМ МОДЕЛЯМ")
-        print('='*60)
-        
-        # Сортировка по F1-score
+        log.info("\n" + "=" * 60)
+        log.info("СВОДКА ПО ОБУЧЕННЫМ МОДЕЛЯМ")
+        log.info("=" * 60)
+
         sorted_models = sorted(
-            self.results.items(), 
-            key=lambda x: x[1]['f1_score'], 
-            reverse=True
+            self.results.items(),
+            key=lambda x: x[1]['f1_macro'],
+            reverse=True,
         )
-        
-        print(f"\n{'Модель':20} | {'Accuracy':10} | {'F1-score':10} | {'Рейтинг'}")
-        print('-'*60)
-        
-        for i, (model_name, metrics) in enumerate(sorted_models, 1):
+
+        log.info(f"\n{'Модель':20} | {'Accuracy':10} | {'F1_macro':10} | {'CV F1_macro':12} | Рейтинг")
+        log.info("-" * 75)
+        for i, (name, m) in enumerate(sorted_models, 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "  "
-            print(f"{model_name:20} | {metrics['accuracy']:.4f}     | {metrics['f1_score']:.4f}     | {medal}")
-        
-        # Лучшая модель
-        best_model = sorted_models[0][0]
-        best_metrics = sorted_models[0][1]
-        
-        print(f"\n🏆 Лучшая модель: {best_model}")
-        print(f"   Accuracy: {best_metrics['accuracy']:.4f}")
-        print(f"   F1-score: {best_metrics['f1_score']:.4f}")
-        print(f"   Путь: {best_metrics['model_path']}")
+            cv = m['cv_f1_macro_mean']
+            cv_str = f"{cv:.4f}" if cv is not None else "—"
+            log.info(f"{name:20} | {m['accuracy']:.4f}     | {m['f1_macro']:.4f}     | {cv_str:12} | {medal}")
+
+        best_name, best_m = sorted_models[0]
+        log.info(f"\n🏆 Лучшая модель: {best_name}")
+        log.info(f"   Accuracy:   {best_m['accuracy']:.4f}")
+        log.info(f"   F1 (macro): {best_m['f1_macro']:.4f}")
+        log.info(f"   Путь:       {best_m['model_path']}")
+
+
+# ==================== ДАННЫЕ ====================
 
 def load_data():
-    """
-    Загрузка данных из файла согласно конфигурации
-    
-    Returns:
-        DataFrame с данными
-    """
     file_path = DATA_CONFIG['file_path']
     text_column = DATA_CONFIG['text_column']
     label_column = DATA_CONFIG['label_column']
@@ -574,133 +589,120 @@ def load_data():
     sample_random = DATA_CONFIG['sample_random']
     nrows = DATA_CONFIG['nrows']
 
-    
-    print(f"\nЗагрузка данных из {file_path}...")
-    
-    if nrows != -1:
+    log.info(f"\nЗагрузка данных из {file_path}...")
+
+    if nrows is not None and nrows != -1:
         df = pd.read_csv(file_path, encoding=encoding, nrows=nrows)
     else:
         df = pd.read_csv(file_path, encoding=encoding)
-    
-    # Проверка наличия колонок
+
     if text_column not in df.columns:
-        raise ValueError(f"Колонка '{text_column}' не найдена. Доступные колонки: {list(df.columns)}")
-    
+        raise ValueError(f"Колонка '{text_column}' не найдена. Доступные: {list(df.columns)}")
     if label_column not in df.columns:
-        raise ValueError(f"Колонка '{label_column}' не найдена. Доступные колонки: {list(df.columns)}")
-    
-    # Удаление пустых значений
+        raise ValueError(f"Колонка '{label_column}' не найдена. Доступные: {list(df.columns)}")
+
     initial_len = len(df)
     df = df.dropna(subset=[text_column, label_column])
-    
-    # Удаление пустых строк
     df = df[df[text_column].astype(str).str.strip() != '']
-    
-    print(f"Загружено {len(df)} записей из {initial_len} (удалено {initial_len - len(df)} пустых)")
-    
-    # Опционально: ограничение количества записей
+    log.info(f"Загружено {len(df)} записей из {initial_len} "
+             f"(удалено {initial_len - len(df)} пустых)")
+
     if max_samples and max_samples < len(df):
         if sample_random:
             df = df.sample(n=max_samples, random_state=DATA_CONFIG['random_state'])
-            print(f"Используем случайную выборку из {max_samples} записей")
+            log.info(f"Случайная выборка: {max_samples}")
         else:
             df = df.head(max_samples)
-            print(f"Используем первые {max_samples} записей")
-    
-    # Статистика по меткам
+            log.info(f"Первые {max_samples} записей")
+
     unique_labels = df[label_column].unique()
-    print(f"\nУникальные метки: {unique_labels}")
-    
-    print("\nРаспределение меток:")
+    log.info(f"\nУникальные метки: {unique_labels}")
+    log.info("\nРаспределение меток:")
     for label in unique_labels:
         count = len(df[df[label_column] == label])
-        print(f"  {label}: {count} ({count/len(df)*100:.1f}%)")
-    
+        log.info(f"  {label}: {count} ({count/len(df)*100:.1f}%)")
+
     return df
 
 
+# ==================== MAIN ====================
+
 def main():
-    """Основная функция программы"""
-    
-    print("="*60)
-    print("ОБУЧЕНИЕ МОДЕЛЕЙ АНАЛИЗА ТОНАЛЬНОСТИ")
-    print("="*60)
-    print(f"Дата запуска: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"\nТЕКУЩАЯ КОНФИГУРАЦИЯ:")
-    print(f"  Файл данных: {DATA_CONFIG['file_path']}")
-    print(f"  Колонка текста: {DATA_CONFIG['text_column']}")
-    print(f"  Колонка меток: {DATA_CONFIG['label_column']}")
-    print(f"  Тестовая выборка: {DATA_CONFIG['test_size']*100}%")
-    print(f"  GridSearch: {'включен' if TRAINING_CONFIG['use_grid_search'] else 'выключен'}")
-    print(f"  Модели: {', '.join(TRAINING_CONFIG['models_to_train'])}")
-    
-    # Загрузка ресурсов NLTK
+    log.info("=" * 60)
+    log.info("ОБУЧЕНИЕ МОДЕЛЕЙ АНАЛИЗА ТОНАЛЬНОСТИ")
+    log.info("=" * 60)
+    log.info(f"Дата запуска: {datetime.now(timezone.utc).isoformat()}")
+    log.info("\nТЕКУЩАЯ КОНФИГУРАЦИЯ:")
+    log.info(f"  Файл данных:     {DATA_CONFIG['file_path']}")
+    log.info(f"  Колонка текста:  {DATA_CONFIG['text_column']}")
+    log.info(f"  Колонка меток:   {DATA_CONFIG['label_column']}")
+    log.info(f"  Тест:            {DATA_CONFIG['test_size']*100}%")
+    log.info(f"  GridSearch:      {'вкл' if TRAINING_CONFIG['use_grid_search'] else 'выкл'}")
+    log.info(f"  CV-оценка:       {'вкл' if TRAINING_CONFIG['use_cv_eval'] else 'выкл'}")
+    log.info(f"  Модели:          {', '.join(TRAINING_CONFIG['models_to_train'])}")
+
     download_nltk_resources()
-    
+
     try:
-        # Загрузка данных
         df = load_data()
-        
-        # Проверка наличия данных
         if len(df) == 0:
-            print("Ошибка: Нет данных для обучения")
+            log.error("Нет данных для обучения")
             return
-        
-        # Подготовка данных
+
         X = df[DATA_CONFIG['text_column']].astype(str).values
         y = df[DATA_CONFIG['label_column']].values
-        
-        # Проверка количества классов
+
         unique_labels = np.unique(y)
         if len(unique_labels) < 2:
-            raise ValueError(f"Ошибка: найдено только {len(unique_labels)} класс(ов). Нужно минимум 2 класса.")
-        
-        # Создание тренера
+            raise ValueError(f"Найдено только {len(unique_labels)} класс(ов). Нужно ≥ 2.")
+
         trainer = SklearnModelTrainer(
             output_dir=TRAINING_CONFIG['output_dir'],
-            random_state=DATA_CONFIG['random_state']
+            random_state=DATA_CONFIG['random_state'],
         )
-        
-        # Преобразование меток в числовой формат
+
         y_numeric, label_mapping, target_names = trainer.prepare_labels(y)
-        
-        # Разделение на обучающую и тестовую выборки
+
         X_train, X_test, y_train, y_test = train_test_split(
-            X, y_numeric, 
-            test_size=DATA_CONFIG['test_size'], 
-            random_state=DATA_CONFIG['random_state'], 
-            stratify=y_numeric
+            X, y_numeric,
+            test_size=DATA_CONFIG['test_size'],
+            random_state=DATA_CONFIG['random_state'],
+            stratify=y_numeric,
+            shuffle=True,
         )
-        
-        print(f"\nРазмер обучающей выборки: {len(X_train)}")
-        print(f"Размер тестовой выборки: {len(X_test)}")
-        
-        # Обучение моделей
-        models, results = trainer.train_multiple_models(
+
+        log.info(f"\nРазмер обучающей выборки: {len(X_train)}")
+        log.info(f"Размер тестовой выборки:  {len(X_test)}")
+
+        try:
+            weights = compute_class_weight(
+                'balanced', classes=np.unique(y_train), y=y_train
+            )
+            log.info(f"Веса классов: {dict(zip(np.unique(y_train), weights))}")
+        except Exception:
+            pass
+
+        trainer.train_multiple_models(
             X_train=X_train,
             y_train=y_train,
             X_test=X_test,
             y_test=y_test,
             label_mapping=label_mapping,
-            target_names=target_names
+            target_names=target_names,
         )
-        
-        # Сохранение результатов
+
         trainer.save_results()
-        
-        # Вывод сводки
         trainer.print_summary()
-        
-        print(f"\n✅ Обучение завершено успешно!")
-        print(f"   Модели сохранены в директории: {TRAINING_CONFIG['output_dir']}")
-        
+
+        log.info("\n✅ Обучение завершено успешно!")
+        log.info(f"   Модели: {TRAINING_CONFIG['output_dir']}")
+
     except FileNotFoundError:
-        print(f"\n❌ Ошибка: Файл {DATA_CONFIG['file_path']} не найден!")
-        print("   Убедитесь, что файл существует и путь указан правильно.")
+        log.error(f"\n❌ Файл {DATA_CONFIG['file_path']} не найден!")
     except Exception as e:
-        print(f"\n❌ Ошибка: {e}")
+        log.error(f"\n❌ Ошибка: {e}")
         import traceback
-        traceback.print_exc()
+        log.error(traceback.format_exc())
 
 
 if __name__ == "__main__":

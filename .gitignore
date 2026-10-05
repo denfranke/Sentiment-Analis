@@ -4,3 +4,9 @@ models/random_forest_model.joblib
 data/rusentiment-flair-model/final-model.pt
 .venv/Lib/site-packages/torch/lib/torch_cpu.dll
 /data
+dostoevskyTest.py
+.venv/Lib/site-packages/~orch/lib/torch_cpu.dll
+TrainAndDownload/book/add3column/data/sentiment_dataset_merged_2_shuffled_with_domain.csv
+TrainAndDownload/book/add3column/data/sentiment_dataset_merged_2_shuffled.csv
+TrainAndDownload/book/add3column/data/merged_all_domains.csv
+models/old model/bad/random_forest_model.joblib

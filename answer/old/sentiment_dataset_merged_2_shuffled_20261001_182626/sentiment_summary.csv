@@ -1,0 +1,16 @@
+﻿metric,value
+total_with_rating,0.0
+total_translated,100.0
+total_not_translated,0.0
+positive_count,0.0
+negative_count,0.0
+neutral_count,0.0
+avg_vader_score,3.08
+avg_flair_score,3.0
+avg_rubert_score,3.0
+avg_roberta_score,3.08
+avg_distilbert_score,3.0
+avg_ensemble_score,3.04
+avg_logistic_regression_score,3.0
+avg_svm_score,3.0
+avg_random_forest_score,3.0

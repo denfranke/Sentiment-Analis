@@ -1,8 +1,19 @@
+import os
 import pandas as pd
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import asyncio
-from googletrans import Translator
+
+os.environ["ARGOS_INTER_THREADS"] = "4"   # параллельные задачи
+os.environ["ARGOS_INTRA_THREADS"] = "8"   # потоки внутри задачи
+os.environ["ARGOS_CHUNK_TYPE"] = "SPACY"  # быстрый сплиттер предложений
+os.environ["ARGOS_PACKAGES_DIR"] = r"C:\argos-packages"
+
+
+import argostranslate.package
+import argostranslate.translate
+
+from pathlib import Path
 from flair.models import TextClassifier
 from flair.data import Sentence
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
@@ -18,7 +29,6 @@ from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 import joblib
-import os
 import string
 import pymorphy2
 from nltk.corpus import stopwords
@@ -26,6 +36,11 @@ from nltk.corpus import stopwords
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Приглушить логирование Argos и его зависимости
+for name in ['argostranslate', 'argostranslate.translate', 'argostranslate.package',
+             'stanza', 'spacy', 'ctranslate2', 'sentencepiece']:
+    logging.getLogger(name).setLevel(logging.WARNING)
 
 nltk.download('vader_lexicon', quiet=True)
 nltk.download('stopwords', quiet=True)
@@ -86,30 +101,30 @@ except Exception as e:
     en_sentiment_pipeline = None
 
 #  DistilBERT 
-try:
-    light_ru_sentiment = pipeline(
-        "sentiment-analysis",
-        # model='Geotrend/distilbert-base-ru-cased', 
-        # tokenizer='Geotrend/distilbert-base-ru-cased',
-        model='cointegrated/rubert-tiny2',
-        tokenizer='cointegrated/rubert-tiny2',
-        device=0 if torch.cuda.is_available() else -1
-    )
-    logger.info("DistilBERT (Russian sentiment) модель загружена")
-except Exception as e:
-    logger.error(f"Ошибка загрузки русской DistilBERT: {e}")
-    # Альтернативная модель
-    try:
-        light_ru_sentiment = pipeline(
-            "sentiment-analysis",
-            model='cointegrated/rubert-tiny2',
-            tokenizer='cointegrated/rubert-tiny2',
-            device=0 if torch.cuda.is_available() else -1
-        )
-        logger.info("RuBERT-tiny2 модель загружена как альтернатива DistilBERT")
-    except Exception as e2:
-        logger.error(f"Ошибка загрузки альтернативной модели: {e2}")
-        light_ru_sentiment = None
+# try:
+#     light_ru_sentiment = pipeline(
+#         "sentiment-analysis",
+#         model='tabularisai/multilingual-sentiment-analysis', 
+#         tokenizer='tabularisai/multilingual-sentiment-analysis',
+#         # model='cointegrated/rubert-tiny-sentiment-balanced',
+#         # tokenizer='cointegrated/rubert-tiny-sentiment-balanced',
+#         device=0 if torch.cuda.is_available() else -1
+#     )
+#     logger.info("DistilBERT (Russian sentiment) модель загружена")
+# except Exception as e:
+#     logger.error(f"Ошибка загрузки русской DistilBERT: {e}")
+#     # Альтернативная модель
+#     try:
+#         light_ru_sentiment = pipeline(
+#             "sentiment-analysis",
+#             model='cointegrated/rubert-tiny2',
+#             tokenizer='cointegrated/rubert-tiny2',
+#             device=0 if torch.cuda.is_available() else -1
+#         )
+#         logger.info("RuBERT-tiny2 модель загружена как альтернатива DistilBERT")
+#     except Exception as e2:
+#         logger.error(f"Ошибка загрузки альтернативной модели: {e2}")
+#         light_ru_sentiment = None
 
 # Класс для предобработки текстов перед использованием моделей scikit-learn
 class TextPreprocessor:
@@ -549,7 +564,7 @@ def get_transformer_sentiment_ru(text):
     Анализирует тональность русского текста с помощью RuBERT
     """
     if ru_sentiment_pipeline is None:
-        return None, None, "Neutral", 0.0
+        return None, None, None, None
     
     try:
         # Обрезаем слишком длинные тексты
@@ -574,18 +589,23 @@ def get_transformer_sentiment_ru(text):
         return label, score, sentiment_label, confidence
     except Exception as e:
         logger.error(f"Ошибка в RuBERT анализе: {e}")
-        return None, 3, "Neutral", 0.0
+        return None, None, None, None
 
 # Исправленная функция get_transformer_sentiment_en (для английских моделей)
 def get_transformer_sentiment_en(text, model_type='roberta'):
     """
-    Анализирует тональность английского текста с помощью 'roberta'
+    Анализирует тональность английского текста с помощью 'roberta'.
+    Если текст пустой/None — возвращает None-оценки (модель не учитывается).
     """
     if model_type != 'roberta':
         logger.warning(f"Модель {model_type} не поддерживается для английского, использую roberta")
     
     if en_sentiment_pipeline is None:
-        return None, 3, "Neutral", 0.0
+        return None, None, None, None
+    
+    # Если перевода нет — модель не должна давать оценку
+    if text is None or not isinstance(text, str) or text.strip() == "":
+        return None, None, None, None
     
     try:
         # Обрезаем слишком длинные тексты
@@ -610,151 +630,265 @@ def get_transformer_sentiment_en(text, model_type='roberta'):
         return label, score, sentiment_label, confidence
     except Exception as e:
         logger.error(f"Ошибка в RoBERTa анализе: {e}")
-        return None, 3, "Neutral", 0.0
+        return None, None, None, None
+
+# def get_transformer_sentiment_ru_light(text):
+#     """
+#     Анализирует тональность русского текста с помощью легкой DistilBERT модели
+#     """
+#     # Инициализация легкой русской модели (если еще не создана)
+#     if not hasattr(get_transformer_sentiment_ru_light, 'light_ru_pipeline'):
+#         try:
+#             # Используем русскую DistilBERT модель для sentiment analysis
+#             get_transformer_sentiment_ru_light.light_ru_pipeline = pipeline(
+#                 "sentiment-analysis",
+#                 model='Geotrend/distilbert-base-ru-cased',  # Русская DistilBERT
+#                 tokenizer='Geotrend/distilbert-base-ru-cased',
+#                 device=0 if torch.cuda.is_available() else -1
+#             )
+#             logger.info("DistilBERT (Russian) модель загружена")
+#         except Exception as e:
+#             logger.error(f"Ошибка загрузки русской DistilBERT: {e}")
+#             # Альтернативная русская модель, если первая не загрузилась
+#             try:
+#                 get_transformer_sentiment_ru_light.light_ru_pipeline = pipeline(
+#                     "sentiment-analysis",
+#                     model='cointegrated/rubert-tiny2',
+#                     tokenizer='cointegrated/rubert-tiny2',
+#                     device=0 if torch.cuda.is_available() else -1
+#                 )
+#                 logger.info("RuBERT-tiny2 модель загружена как альтернатива")
+#             except Exception as e2:
+#                 logger.error(f"Ошибка загрузки альтернативной модели: {e2}")
+#                 get_transformer_sentiment_ru_light.light_ru_pipeline = None
+    
+#     if get_transformer_sentiment_ru_light.light_ru_pipeline is None:
+#         return None, None, None, None
+    
+#     try:
+#         # Обрезаем слишком длинные тексты
+#         if len(text) > 512:
+#             text = text[:512]
+        
+#         result = get_transformer_sentiment_ru_light.light_ru_pipeline(text)[0]
+#         label = result['label']
+#         confidence = result['score']
+        
+#         # Преобразование меток модели в наш формат
+#         label_lower = label.lower()
+        
+#         # Обработка различных форматов меток
+#         if 'positive' in label_lower or 'pos' in label_lower or label in ['LABEL_1', '1']:
+#             sentiment_label = "Positive"
+#             score = 5
+#         elif 'negative' in label_lower or 'neg' in label_lower or label in ['LABEL_0', '0']:
+#             sentiment_label = "Negative"
+#             score = 1
+#         elif 'neutral' in label_lower:
+#             sentiment_label = "Neutral"
+#             score = 3
+#         else: 
+#             # Если метка не распознана, считаем нейтральной
+#             sentiment_label = "Neutral"
+#             score = 3
+            
+#         return label, score, sentiment_label, confidence
+        
+#     except Exception as e:
+#         logger.error(f"Ошибка в русской DistilBERT анализе: {e}")
+#         return None, None, None, None
 
 def get_transformer_sentiment_ru_light(text):
     """
-    Анализирует тональность русского текста с помощью легкой DistilBERT модели
-    Исправлено: использование русской модели для анализа оригинального текста
+    Анализирует тональность текста с помощью мультиязычной модели
+    tabularisai/multilingual-sentiment-analysis.
+
+    Модель возвращает 5 классов:
+        LABEL_0 = Very Negative
+        LABEL_1 = Negative
+        LABEL_2 = Neutral
+        LABEL_3 = Positive
+        LABEL_4 = Very Positive
+
+    Маппинг в наши оценки:
+        1 = Negative / Very Negative
+        3 = Neutral
+        5 = Positive / Very Positive
+
+    Возвращает: (raw_label, score, sentiment_label, confidence)
     """
-    # Инициализация легкой русской модели (если еще не создана)
+    # --- Ленивая инициализация пайплайна ---
     if not hasattr(get_transformer_sentiment_ru_light, 'light_ru_pipeline'):
         try:
-            # Используем русскую DistilBERT модель для sentiment analysis
             get_transformer_sentiment_ru_light.light_ru_pipeline = pipeline(
                 "sentiment-analysis",
-                model='Geotrend/distilbert-base-ru-cased',  # Русская DistilBERT
-                tokenizer='Geotrend/distilbert-base-ru-cased',
+                model='tabularisai/multilingual-sentiment-analysis',
+                tokenizer='tabularisai/multilingual-sentiment-analysis',
                 device=0 if torch.cuda.is_available() else -1
             )
-            logger.info("DistilBERT (Russian) модель загружена")
+            logger.info("Multilingual sentiment model (tabularisai) загружена")
         except Exception as e:
-            logger.error(f"Ошибка загрузки русской DistilBERT: {e}")
-            # Альтернативная русская модель, если первая не загрузилась
+            logger.error(f"Ошибка загрузки tabularisai/multilingual-sentiment-analysis: {e}")
+            # Запасной вариант — лёгкая русская модель
             try:
                 get_transformer_sentiment_ru_light.light_ru_pipeline = pipeline(
                     "sentiment-analysis",
-                    model='cointegrated/rubert-tiny2',
-                    tokenizer='cointegrated/rubert-tiny2',
+                    model='cointegrated/rubert-tiny-sentiment-balanced',
+                    tokenizer='cointegrated/rubert-tiny-sentiment-balanced',
                     device=0 if torch.cuda.is_available() else -1
                 )
-                logger.info("RuBERT-tiny2 модель загружена как альтернатива")
+                logger.info("cointegrated/rubert-tiny-sentiment-balanced загружена как fallback")
             except Exception as e2:
-                logger.error(f"Ошибка загрузки альтернативной модели: {e2}")
+                logger.error(f"Fallback тоже не загрузился: {e2}")
                 get_transformer_sentiment_ru_light.light_ru_pipeline = None
-    
+
     if get_transformer_sentiment_ru_light.light_ru_pipeline is None:
-        return None, 3, "Neutral", 0.0
-    
+        return None, None, None, None
+
+    # --- Инференс ---
     try:
-        # Обрезаем слишком длинные тексты
         if len(text) > 512:
             text = text[:512]
-        
+
         result = get_transformer_sentiment_ru_light.light_ru_pipeline(text)[0]
-        label = result['label']
+        raw_label = result['label']          # 'LABEL_0' ... 'LABEL_4'
         confidence = result['score']
-        
-        # Преобразование меток модели в наш формат
-        label_lower = label.lower()
-        
-        # Обработка различных форматов меток
-        if 'positive' in label_lower or 'pos' in label_lower or label in ['LABEL_1', '1']:
-            sentiment_label = "Positive"
-            score = 5
-        elif 'negative' in label_lower or 'neg' in label_lower or label in ['LABEL_0', '0']:
-            sentiment_label = "Negative"
-            score = 1
-        elif 'neutral' in label_lower:
-            sentiment_label = "Neutral"
-            score = 3
-        else: 
-            # Если метка не распознана, считаем нейтральной
-            sentiment_label = "Neutral"
-            score = 3
-            
-        return label, score, sentiment_label, confidence
-        
+
+        # --- Маппинг 5 классов tabularisai в наши оценки ---
+        label_map = {
+            'LABEL_0': ('Very Negative', 1, 'Negative'),
+            'LABEL_1': ('Negative',      1, 'Negative'),
+            'LABEL_2': ('Neutral',       3, 'Neutral'),
+            'LABEL_3': ('Positive',      5, 'Positive'),
+            'LABEL_4': ('Very Positive', 5, 'Positive'),
+        }
+
+        # Если модель вернула готовые строковые метки (не LABEL_x) — обрабатываем их тоже
+        if raw_label not in label_map:
+            low = raw_label.lower()
+            if 'very negative' in low:
+                label_map[raw_label] = ('Very Negative', 1, 'Negative')
+            elif 'negative' in low:
+                label_map[raw_label] = ('Negative', 1, 'Negative')
+            elif 'very positive' in low:
+                label_map[raw_label] = ('Very Positive', 5, 'Positive')
+            elif 'positive' in low:
+                label_map[raw_label] = ('Positive', 5, 'Positive')
+            else:
+                label_map[raw_label] = ('Neutral', 3, 'Neutral')
+
+        readable_label, score, sentiment_label = label_map[raw_label]
+
+        return raw_label, score, sentiment_label, confidence
+
     except Exception as e:
-        logger.error(f"Ошибка в русской DistilBERT анализе: {e}")
-        return None, 3, "Neutral", 0.0
+        logger.error(f"Ошибка в tabularisai sentiment анализе: {e}")
+        return None, None, None, None
 
 class TextTranslator:
     """
-    Класс для управления переводами текстов
+    Переводчик на базе Argos Translate (офлайн, без лимитов Google).
+    Модели должны находиться в C:\\argos-packages\\*.argosmodel
     """
+    ARGOS_DIR = r"C:\argos-packages"
+
     def __init__(self, max_concurrent_translations=10):
-        self.translator = Translator()
+        # Указываем путь к моделям ДО инициализации (на случай, если ещё не задан)
+        os.environ.setdefault("ARGOS_PACKAGES_DIR", self.ARGOS_DIR)
+        self._ensure_models_installed()
+
         self.max_concurrent = max_concurrent_translations
         self.semaphore = asyncio.Semaphore(max_concurrent_translations)
-        logger.info(f"Инициализирован переводчик с максимум {max_concurrent_translations} параллельных переводов")
-    
+        logger.info(f"Инициализирован Argos-переводчик с максимум "
+                    f"{max_concurrent_translations} параллельных переводов")
+
+    def _ensure_models_installed(self):
+        """Устанавливает модели из C:\\argos-packages, если они ещё не зарегистрированы."""
+        installed = argostranslate.package.get_installed_packages()
+        pairs = {(p.from_code, p.to_code) for p in installed}
+        required = {("ru", "en"), ("en", "ru")}
+
+        if required.issubset(pairs):
+            logger.info("Argos-модели уже установлены.")
+            return
+
+        argos_path = Path(self.ARGOS_DIR)
+        if not argos_path.exists():
+            logger.error(f"Папка с моделями не найдена: {self.ARGOS_DIR}")
+            return
+
+        for model_file in argos_path.glob("*.argosmodel"):
+            logger.info(f"Устанавливаю Argos-модель: {model_file.name}")
+            try:
+                argostranslate.package.install_from_path(str(model_file))
+            except Exception as e:
+                logger.error(f"Ошибка установки {model_file.name}: {e}")
+
+        logger.info(f"Установленные пакеты: {argostranslate.package.get_installed_packages()}")
+
     async def translate_single(self, text):
         """
-        Перевод одного текста с использованием семафора для ограничения параллельных запросов
+        Перевод одного текста (ru → en) через Argos Translate.
+        Возвращает None при пустом тексте или ошибке.
         """
         if pd.isna(text) or not isinstance(text, str) or text.strip() == "":
             return None
-        
+
         async with self.semaphore:
             try:
-                # Уменьшаем задержку для ускорения
-                await asyncio.sleep(0.01)
-                result = await self.translator.translate(text, src='ru', dest='en')
-                return result.text
-            except Exception:
-                return text
-    
+                # Argos Translate синхронный — уводим в отдельный поток
+                result = await asyncio.to_thread(
+                    argostranslate.translate.translate, text, "ru", "en"
+                )
+                if not result or not isinstance(result, str):
+                    return None
+                return result
+            except Exception as e:
+                logger.error(f"Ошибка перевода Argos: {e}")
+                return None
+
     async def translate_batch(self, texts, batch_size=50):
         """
-        Пакетный перевод текстов с контролем параллельности
+        Пакетный перевод с контролем параллельности.
         """
         translated_texts = []
-        total_batches = (len(texts) + batch_size - 1) // batch_size
-        
         for batch_idx in range(0, len(texts), batch_size):
             batch = texts[batch_idx:batch_idx + batch_size]
-            
-            # Создаем задачи для текущего пакета
+
             tasks = []
             for text in batch:
                 if pd.isna(text) or not isinstance(text, str) or text.strip() == "":
                     tasks.append(None)
                 else:
                     tasks.append(asyncio.create_task(self.translate_single(text)))
-            
-            # Ждем завершения всех задач в пакете
+
             batch_results = []
             for task in tasks:
                 if task is None:
                     batch_results.append(None)
                 else:
                     try:
-                        result = await task
-                        batch_results.append(result)
+                        batch_results.append(await task)
                     except Exception:
                         batch_results.append(None)
-            
+
             translated_texts.extend(batch_results)
-            
-            # Минимальная задержка между пакетами
+
             if batch_idx + batch_size < len(texts):
-                await asyncio.sleep(0.1)
-        
+                await asyncio.sleep(0.05)
+
         return translated_texts
-    
+
     def translate_sync(self, text):
-        """
-        Синхронный перевод для случаев, когда async не используется
-        """
+        """Синхронная обёртка (если где-то в коде нужен прямой вызов)."""
+        if pd.isna(text) or not isinstance(text, str) or text.strip() == "":
+            return None
         try:
-            if pd.isna(text) or not isinstance(text, str) or text.strip() == "":
-                return None
-            result = self.translator.translate(text, src='ru', dest='en')
-            return result.text
+            result = argostranslate.translate.translate(text, "ru", "en")
+            return result if result and isinstance(result, str) else None
         except Exception as e:
-            # logger.error(f"Ошибка синхронного перевода: {e}")
-            return text
+            logger.error(f"Ошибка синхронного перевода Argos: {e}")
+            return None
 
 
 async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stats_file, 
@@ -813,29 +947,40 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
         if pd.isna(original_text) or original_text.strip() == "":
             result_row = create_empty_result_row()
         else:
-            # VADER анализирует переведенный текст (английский)
-            if translated_text:
+            # Флаг: был ли получен перевод
+            translation_ok = (
+                translated_text is not None 
+                and isinstance(translated_text, str) 
+                and translated_text.strip() != ""
+            )
+
+            # VADER анализирует переведенный текст (английский) — только если перевод есть
+            if translation_ok:
                 scores = sia.polarity_scores(translated_text)
                 vader_predicted = interpret_sentiment_scores(scores)
             else:
-                scores = {'neg': 0.0, 'neu': 0.0, 'pos': 0.0, 'compound': 0.0}
-                vader_predicted = 'Neutral'
+                # Модель не даёт оценку — все поля None
+                scores = None
+                vader_predicted = None
 
-            # Flair анализирует оригинальный текст (русский)
+            # Flair анализирует оригинальный текст (русский) — не зависит от перевода
             flair_score, flair_predicted, flair_confidence = get_flair_score(original_text)
             
-            # RuBERT анализирует оригинальный текст (русский)
+            # RuBERT анализирует оригинальный текст (русский) — не зависит от перевода
             rubert_raw, rubert_score, rubert_predicted, rubert_confidence = get_transformer_sentiment_ru(original_text)
 
-            # RoBERTa анализирует переведенный текст (английский)
-            roberta_raw, roberta_score, roberta_predicted, roberta_confidence = get_transformer_sentiment_en(
-                translated_text if translated_text else "", 'roberta'
-            )
+            # RoBERTa анализирует переведенный текст (английский) — только если перевод есть
+            if translation_ok:
+                roberta_raw, roberta_score, roberta_predicted, roberta_confidence = get_transformer_sentiment_en(
+                    translated_text, 'roberta'
+                )
+            else:
+                roberta_raw, roberta_score, roberta_predicted, roberta_confidence = None, None, None, None
             
-            # DistilBERT анализирует оригинальный текст (русский) - легкая русская модель
+            # DistilBERT анализирует оригинальный текст (русский) — не зависит от перевода
             distilbert_raw, distilbert_score, distilbert_predicted, distilbert_confidence = get_transformer_sentiment_ru_light(original_text)
                    
-            # scikit-learn модели (русский) - используем загруженные модели из .joblib
+            # scikit-learn модели (русский) — не зависят от перевода
             sklearn_results = {}
             for model_name in sklearn_models.keys():
                 score, sentiment, confidence = get_sklearn_sentiment(original_text, model_name, sklearn_models)
@@ -922,39 +1067,43 @@ async def analyze_sentiment_from_csv(input_file, output_file, summary_file, stat
 
 
 def create_empty_result_row():
+    """
+    Пустая строка результата. Все оценки — None,
+    чтобы модели не учитывались в статистике и ensemble.
+    """
     result = {
         # VADER результаты
-        'vader_neg': 0.0, 'vader_neu': 0.0, 'vader_pos': 0.0,
-        'vader_compound': 0.0, 'vader_sentiment': 'Neutral', 'vader_score': 3,
+        'vader_neg': None, 'vader_neu': None, 'vader_pos': None,
+        'vader_compound': None, 'vader_sentiment': None, 'vader_score': None,
         
         # Flair результаты
-        'flair_score': 3, 'flair_sentiment': 'Neutral', 'flair_confidence': 0.0,
+        'flair_score': None, 'flair_sentiment': None, 'flair_confidence': None,
         
         # RuBERT результаты
-        'rubert_raw_label': None, 'rubert_score': 3,
-        'rubert_sentiment': 'Neutral', 'rubert_confidence': 0.0,
+        'rubert_raw_label': None, 'rubert_score': None,
+        'rubert_sentiment': None, 'rubert_confidence': None,
         
         # RoBERTa результаты
-        'roberta_raw_label': None, 'roberta_score': 3,
-        'roberta_sentiment': 'Neutral', 'roberta_confidence': 0.0,
+        'roberta_raw_label': None, 'roberta_score': None,
+        'roberta_sentiment': None, 'roberta_confidence': None,
         
         # DistilBERT результаты
-        'distilbert_raw_label': None, 'distilbert_score': 3,
-        'distilbert_sentiment': 'Neutral', 'distilbert_confidence': 0.0,
+        'distilbert_raw_label': None, 'distilbert_score': None,
+        'distilbert_sentiment': None, 'distilbert_confidence': None,
         
         # Logistic Regression
-        'logistic_regression_score': 3, 'logistic_regression_sentiment': 'Neutral',
-        'logistic_regression_confidence': 0.0,
+        'logistic_regression_score': None, 'logistic_regression_sentiment': None,
+        'logistic_regression_confidence': None,
         
         # SVM
-        'svm_score': 3, 'svm_sentiment': 'Neutral', 'svm_confidence': 0.0,
+        'svm_score': None, 'svm_sentiment': None, 'svm_confidence': None,
         
         # Random Forest
-        'random_forest_score': 3, 'random_forest_sentiment': 'Neutral',
-        'random_forest_confidence': 0.0,
+        'random_forest_score': None, 'random_forest_sentiment': None,
+        'random_forest_confidence': None,
         
         # Ensemble
-        'ensemble_score_raw': 3.0, 'ensemble_score': 3, 'ensemble_sentiment': 'Neutral',
+        'ensemble_score_raw': None, 'ensemble_score': None, 'ensemble_sentiment': None,
         
         # Actual и метрики
         'actual_sentiment': None,
@@ -962,7 +1111,8 @@ def create_empty_result_row():
         'is_correct_roberta': None, 'is_correct_distilbert': None,
         'is_correct_logistic_regression': None, 'is_correct_svm': None,
         'is_correct_random_forest': None, 'is_correct_ensemble': None,
-        'translated_text': None
+        'translated_text': None,
+        'translation_ok': False
     }
     
     return result
@@ -974,48 +1124,59 @@ def create_result_row(scores, vader_predicted,
                      distilbert_raw, distilbert_score, distilbert_predicted, distilbert_confidence,
                      sklearn_results, actual, translated_text):
     
-    # Преобразование compound score в vader_score (1, 3, 5)
-    if scores['compound'] >= 0.33:
-        vader_score = 5
-    elif scores['compound'] <= -0.33:
-        vader_score = 1
+    # VADER: если scores is None — перевода не было, модель не даёт оценку
+    if scores is not None:
+        if scores['compound'] >= 0.33:
+            vader_score = 5
+        elif scores['compound'] <= -0.33:
+            vader_score = 1
+        else:
+            vader_score = 3
+        vader_neg = scores['neg']
+        vader_neu = scores['neu']
+        vader_pos = scores['pos']
+        vader_compound = scores['compound']
     else:
-        vader_score = 3
+        vader_score = None
+        vader_neg = None
+        vader_neu = None
+        vader_pos = None
+        vader_compound = None
     
     # Получаем scores от scikit-learn моделей с значениями по умолчанию
-    logistic_score = 3
-    svm_score = 3
-    random_forest_score = 3
+    logistic_score = None
+    svm_score = None
+    random_forest_score = None
     
-    logistic_sentiment = "Neutral"
-    svm_sentiment = "Neutral"
-    random_forest_sentiment = "Neutral"
+    logistic_sentiment = None
+    svm_sentiment = None
+    random_forest_sentiment = None
     
-    logistic_confidence = 0.0
-    svm_confidence = 0.0
-    random_forest_confidence = 0.0
+    logistic_confidence = None
+    svm_confidence = None
+    random_forest_confidence = None
     
     # Извлекаем значения из sklearn_results, если они есть
     for model_name, model_result in sklearn_results.items():
         if 'logistic' in model_name.lower():
-            logistic_score = model_result.get('score', 3)
-            logistic_sentiment = model_result.get('sentiment', 'Neutral')
-            logistic_confidence = model_result.get('confidence', 0.0)
+            logistic_score = model_result.get('score', None)
+            logistic_sentiment = model_result.get('sentiment', None)
+            logistic_confidence = model_result.get('confidence', None)
         elif 'svm' in model_name.lower():
-            svm_score = model_result.get('score', 3)
-            svm_sentiment = model_result.get('sentiment', 'Neutral')
-            svm_confidence = model_result.get('confidence', 0.0)
+            svm_score = model_result.get('score', None)
+            svm_sentiment = model_result.get('sentiment', None)
+            svm_confidence = model_result.get('confidence', None)
         elif 'random' in model_name.lower() or 'forest' in model_name.lower():
-            random_forest_score = model_result.get('score', 3)
-            random_forest_sentiment = model_result.get('sentiment', 'Neutral')
-            random_forest_confidence = model_result.get('confidence', 0.0)
+            random_forest_score = model_result.get('score', None)
+            random_forest_sentiment = model_result.get('sentiment', None)
+            random_forest_confidence = model_result.get('confidence', None)
     
-    # Сбор всех 8 scores для ensemble
+    # Сбор всех scores для ensemble (только валидные, не None)
     all_scores = [
-        vader_score,           # 1. VADER
+        vader_score,           # 1. VADER (None, если нет перевода)
         flair_score,           # 2. Flair
         rubert_score,          # 3. RuBERT
-        roberta_score,         # 4. RoBERTa
+        roberta_score,         # 4. RoBERTa (None, если нет перевода)
         distilbert_score,      # 5. DistilBERT
         logistic_score,        # 6. Logistic Regression
         svm_score,             # 7. SVM
@@ -1029,34 +1190,47 @@ def create_result_row(scores, vader_predicted,
         ensemble_score_raw = sum(valid_scores) / len(valid_scores)
         ensemble_score_rounded = round(ensemble_score_raw)
     else:
-        ensemble_score_raw = 3.0
-        ensemble_score_rounded = 3
+        ensemble_score_raw = None
+        ensemble_score_rounded = None
     
     # Определение ensemble_sentiment на основе ensemble_score_rounded
-    if ensemble_score_rounded >= 4:
+    if ensemble_score_rounded is None:
+        ensemble_sentiment = None
+    elif ensemble_score_rounded >= 4:
         ensemble_sentiment = "Positive"
     elif ensemble_score_rounded <= 2:
         ensemble_sentiment = "Negative"
     else:
         ensemble_sentiment = "Neutral"
     
-    # Вычисление метрик корректности
     actual_sentiment = actual
     
-    is_correct_vader = (vader_predicted == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_flair = (flair_predicted == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_rubert = (rubert_predicted == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_roberta = (roberta_predicted == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_distilbert = (distilbert_predicted == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_logistic = (logistic_sentiment == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_svm = (svm_sentiment == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_random_forest = (random_forest_sentiment == actual_sentiment) if actual_sentiment is not None else None
-    is_correct_ensemble = (ensemble_sentiment == actual_sentiment) if actual_sentiment is not None else None
+    # Вспомогательная функция: None, если модель не дала оценку ИЛИ нет actual
+    def _correct(pred):
+        if pred is None or actual_sentiment is None:
+            return None
+        return pred == actual_sentiment
+    
+    is_correct_vader = _correct(vader_predicted)
+    is_correct_flair = _correct(flair_predicted)
+    is_correct_rubert = _correct(rubert_predicted)
+    is_correct_roberta = _correct(roberta_predicted)
+    is_correct_distilbert = _correct(distilbert_predicted)
+    is_correct_logistic = _correct(logistic_sentiment)
+    is_correct_svm = _correct(svm_sentiment)
+    is_correct_random_forest = _correct(random_forest_sentiment)
+    is_correct_ensemble = _correct(ensemble_sentiment)
+    
+    translation_ok = (
+        translated_text is not None 
+        and isinstance(translated_text, str) 
+        and translated_text.strip() != ""
+    )
     
     result = {
         # VADER результаты
-        'vader_neg': scores['neg'], 'vader_neu': scores['neu'],
-        'vader_pos': scores['pos'], 'vader_compound': scores['compound'],
+        'vader_neg': vader_neg, 'vader_neu': vader_neu,
+        'vader_pos': vader_pos, 'vader_compound': vader_compound,
         'vader_sentiment': vader_predicted, 'vader_score': vader_score,
         
         # Flair результаты
@@ -1106,7 +1280,8 @@ def create_result_row(scores, vader_predicted,
         'is_correct_svm': is_correct_svm,
         'is_correct_random_forest': is_correct_random_forest,
         'is_correct_ensemble': is_correct_ensemble,
-        'translated_text': translated_text
+        'translated_text': translated_text,
+        'translation_ok': translation_ok
     }
     
     return result
@@ -1119,6 +1294,12 @@ def print_statistics_to_file(final_df, use_rating, stats_file):
         f.write("\n" + "="*70 + "\n")
         f.write("СТАТИСТИКА АНАЛИЗА ТОНАЛЬНОСТИ\n")
         f.write("="*70 + "\n")
+        
+        # Информация о переводах
+        if 'translation_ok' in final_df.columns:
+            translated_count = int(final_df['translation_ok'].fillna(False).sum())
+            f.write(f"\nПереведено текстов: {translated_count}/{total} ({translated_count/total:.1%})\n")
+            f.write(f"Без перевода (модели VADER и RoBERTa не учитывались): {total - translated_count}\n")
         
         # Список всех моделей для вывода
         models_list = [
@@ -1135,14 +1316,28 @@ def print_statistics_to_file(final_df, use_rating, stats_file):
         
         for name, sent_col, score_col, lang in models_list:
             if sent_col in final_df.columns:
-                counts = final_df[sent_col].value_counts()
+                # Только строки, где модель дала оценку (не None)
+                sent_series = final_df[sent_col].dropna()
+                valid_count = len(sent_series)
+                
                 f.write(f"\n--- {name} (анализ {lang}) ---\n")
-                f.write(f"Всего текстов: {total}\n")
-                f.write(f"Positive: {counts.get('Positive', 0)} ({counts.get('Positive', 0)/total:.1%})\n")
-                f.write(f"Negative: {counts.get('Negative', 0)} ({counts.get('Negative', 0)/total:.1%})\n")
-                f.write(f"Neutral:  {counts.get('Neutral', 0)} ({counts.get('Neutral', 0)/total:.1%})\n")
+                f.write(f"Текстов с оценкой: {valid_count}/{total}\n")
+                
+                if valid_count == 0:
+                    f.write("Нет данных для статистики\n")
+                    continue
+                
+                counts = sent_series.value_counts()
+                f.write(f"Positive: {counts.get('Positive', 0)} ({counts.get('Positive', 0)/valid_count:.1%})\n")
+                f.write(f"Negative: {counts.get('Negative', 0)} ({counts.get('Negative', 0)/valid_count:.1%})\n")
+                f.write(f"Neutral:  {counts.get('Neutral', 0)} ({counts.get('Neutral', 0)/valid_count:.1%})\n")
+                
                 if score_col in final_df.columns:
-                    f.write(f"Средний {name.split()[0]} score: {final_df[score_col].mean():.2f}\n")
+                    mean_val = final_df[score_col].dropna().mean()
+                    if pd.notna(mean_val):
+                        f.write(f"Средний {name.split()[0]} score: {mean_val:.2f}\n")
+                    else:
+                        f.write(f"Средний {name.split()[0]} score: нет данных\n")
         
         # Статистика совпадений (если есть rating)
         if use_rating:
@@ -1167,11 +1362,14 @@ def print_statistics_to_file(final_df, use_rating, stats_file):
                 if col_name in final_df.columns:
                     correct_series = final_df[col_name].dropna()
                     if len(correct_series) > 0:
-                        correct_count = correct_series.sum()
+                        correct_count = correct_series.astype(bool).sum()
                         accuracy = correct_count / len(correct_series)
                         f.write(f"\n{model_name}:\n")
+                        f.write(f"  Оценено текстов: {len(correct_series)}/{total}\n")
                         f.write(f"  Совпадения: {int(correct_count)}/{len(correct_series)}\n")
                         f.write(f"  Точность: {accuracy:.1%}\n")
+                    else:
+                        f.write(f"\n{model_name}:\n  Нет данных (нет валидных оценок)\n")
             
             # Детальная статистика по классам
             f.write("\n--- Детальная статистика по классам ---\n")
@@ -1184,10 +1382,13 @@ def print_statistics_to_file(final_df, use_rating, stats_file):
                 
                 for model_name, col_name in correct_models:
                     if col_name in subset.columns:
-                        correct = subset[col_name].sum()
-                        if len(subset) > 0:
-                            acc = correct / len(subset)
-                            f.write(f"  {model_name:20}: {int(correct)}/{len(subset)} ({acc:.1%})\n")
+                        valid = subset[col_name].dropna()
+                        if len(valid) > 0:
+                            correct = valid.astype(bool).sum()
+                            acc = correct / len(valid)
+                            f.write(f"  {model_name:20}: {int(correct)}/{len(valid)} ({acc:.1%})\n")
+                        else:
+                            f.write(f"  {model_name:20}: нет данных\n")
 
 def save_summary(final_df, summary_file, models):
     try:
@@ -1196,15 +1397,23 @@ def save_summary(final_df, summary_file, models):
         # Общая статистика
         summary_data.append(['total_with_rating', len(final_df[final_df['actual_sentiment'].notna()])])
         
+        # Статистика по переводам
+        if 'translation_ok' in final_df.columns:
+            translated_count = int(final_df['translation_ok'].fillna(False).sum())
+            summary_data.append(['total_translated', translated_count])
+            summary_data.append(['total_not_translated', len(final_df) - translated_count])
+        
         # Статистика по каждой модели
         for model_name, col_name in models:
             if col_name in final_df.columns:
                 correct_series = final_df[col_name].dropna()
                 if len(correct_series) > 0:
+                    summary_data.append([f'evaluated_{model_name.lower().replace(" ", "_")}', 
+                                        len(correct_series)])
                     summary_data.append([f'correct_predictions_{model_name.lower().replace(" ", "_")}', 
-                                        int(correct_series.sum())])
+                                        int(correct_series.astype(bool).sum())])
                     summary_data.append([f'accuracy_{model_name.lower().replace(" ", "_")}', 
-                                        correct_series.sum() / len(correct_series)])
+                                        correct_series.astype(bool).sum() / len(correct_series)])
         
         # Статистика по классам для каждой модели
         for label in ['Positive', 'Negative', 'Neutral']:
@@ -1213,10 +1422,12 @@ def save_summary(final_df, summary_file, models):
             
             for model_name, col_name in models:
                 if col_name in subset.columns and len(subset) > 0:
-                    correct = subset[col_name].sum()
-                    accuracy = correct / len(subset) if len(subset) > 0 else 0
-                    summary_data.append([f'{label.lower()}_accuracy_{model_name.lower().replace(" ", "_")}', 
-                                        accuracy])
+                    valid = subset[col_name].dropna()
+                    if len(valid) > 0:
+                        correct = valid.astype(bool).sum()
+                        accuracy = correct / len(valid)
+                        summary_data.append([f'{label.lower()}_accuracy_{model_name.lower().replace(" ", "_")}', 
+                                            accuracy])
         
         # Добавляем средние scores
         score_columns = [
@@ -1239,7 +1450,9 @@ def save_summary(final_df, summary_file, models):
         
         for col_name, prefix in score_columns:
             if col_name in final_df.columns:
-                summary_data.append([f'avg_{prefix}_score', final_df[col_name].mean()])
+                mean_val = final_df[col_name].dropna().mean()
+                if pd.notna(mean_val):
+                    summary_data.append([f'avg_{prefix}_score', mean_val])
         
         summary_df = pd.DataFrame(summary_data, columns=['metric', 'value'])
         summary_df.to_csv(summary_file, index=False, encoding='utf-8-sig')
@@ -1250,12 +1463,12 @@ def save_summary(final_df, summary_file, models):
 
 if __name__ == "__main__":
     
-    input_csv = "data/отзывы.csv"             
-    output_csv = "answer/отзывы(результат работы).csv"  
+    input_csv = "data/15k_phone.csv"             
+    output_csv = "statya/15k_phone_after_AnalisTon.csv"  
     text_col = "text"                     
-    rating_col = "rating"                   
-    summary_csv = "answer/sentiment_summary.csv" # файл со сводкой
-    stats_file = "answer/sentiment_statistics.txt" # файл с логами
+    rating_col = "label"                   
+    summary_csv = "statya/sentiment_summary.csv" # файл со сводкой
+    stats_file = "statya/sentiment_statistics.txt" # файл с логами
     models_dir = "models"  # директория с предобученными моделями .joblib
     max_rows = 1000
     

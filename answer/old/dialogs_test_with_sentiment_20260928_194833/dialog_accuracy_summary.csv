@@ -1,0 +1,12 @@
+﻿metric,value
+total_dialogs_with_rating,10.0
+correct_predictions_ensemble,7.0
+accuracy_ensemble,0.7
+accuracy_vader_by_dialog,0.0
+accuracy_flair_by_dialog,0.3
+accuracy_rubert_by_dialog,0.1
+accuracy_roberta_by_dialog,0.4
+accuracy_distilbert_by_dialog,0.9
+accuracy_logistic_regression_by_dialog,0.1
+accuracy_svm_by_dialog,0.1
+accuracy_random_forest_by_dialog,0.1

@@ -1,0 +1,67 @@
+"""
+Тестовый запуск модели tabularisai/multilingual-sentiment-analysis.
+Модель поддерживает 23 языка, включая русский, и использует 5 классов:
+Very Negative, Negative, Neutral, Positive, Very Positive.
+"""
+
+from transformers import pipeline
+
+def main():
+    print("Загрузка модели tabularisai/multilingual-sentiment-analysis...")
+    print("(При первом запуске потребуется скачать ~500 МБ, это может занять время)\n")
+
+    # Загружаем пайплайн для классификации текста
+    # Указываем return_all_scores=True, чтобы видеть вероятности всех 5 классов
+    pipe = pipeline(
+        "text-classification",
+        model="tabularisai/multilingual-sentiment-analysis",
+        return_all_scores=True
+    )
+
+    # Тестовые примеры на разных языках
+    test_texts = [
+        "Этот продукт просто ужасен, я очень разочарован.",      # Русский, негатив
+        "Обслуживание было нормальным, ничего особенного.",      # Русский, нейтрально
+        "Я в полном восторге! Лучшая покупка за год!",           # Русский, позитив
+        "This is the worst experience I've ever had.",          # Английский, негатив
+        "The food was amazing and the staff was very friendly.", # Английский, позитив
+        "Це було жахливо, я більше ніколи не повернуся.",        # Украинский, негатив
+    ]
+
+    print("=" * 70)
+    print("РЕЗУЛЬТАТЫ АНАЛИЗА ТОНАЛЬНОСТИ")
+    print("=" * 70)
+
+    for text in test_texts:
+        # Получаем вероятности для всех классов
+        results = pipe(text)[0]
+        
+        # Сортируем по убыванию уверенности
+        sorted_results = sorted(results, key=lambda x: x['score'], reverse=True)
+        
+        # Берём самый вероятный класс
+        top_result = sorted_results[0]
+        
+        print(f"\nТекст: \"{text}\"")
+        print(f"  → Предсказание: {top_result['label']} (уверенность: {top_result['score']:.3f})")
+        print(f"  → Все вероятности:")
+        
+        # Маппинг меток для читаемости
+        label_map = {
+            "LABEL_0": "Very Negative",
+            "LABEL_1": "Negative",
+            "LABEL_2": "Neutral",
+            "LABEL_3": "Positive",
+            "LABEL_4": "Very Positive",
+        }
+        
+        for r in sorted_results:
+            readable_label = label_map.get(r['label'], r['label'])
+            print(f"      {readable_label:15} : {r['score']:.4f}")
+        
+        print("-" * 70)
+
+    print("\nТестирование завершено!")
+
+if __name__ == "__main__":
+    main()

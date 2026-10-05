@@ -1047,7 +1047,7 @@ class SentimentAnalysisGUI(QMainWindow):
         self.open_folder_btn.setEnabled(True)
         
         # Переключаемся на вкладку результатов
-        self.tabs.setCurrentIndex(2)
+        self.tabs.setCurrentIndex(3)
         
         QMessageBox.information(
             self, 

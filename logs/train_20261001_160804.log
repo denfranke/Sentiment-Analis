@@ -1,0 +1,57 @@
+2026-10-01 19:08:04,757 | INFO | ============================================================
+2026-10-01 19:08:04,758 | INFO | ОБУЧЕНИЕ МОДЕЛЕЙ АНАЛИЗА ТОНАЛЬНОСТИ
+2026-10-01 19:08:04,758 | INFO | ============================================================
+2026-10-01 19:08:04,758 | INFO | Дата запуска: 2026-10-01T16:08:04.758806+00:00
+2026-10-01 19:08:04,758 | INFO | 
+ТЕКУЩАЯ КОНФИГУРАЦИЯ:
+2026-10-01 19:08:04,758 | INFO |   Файл данных:     data/sentiment_dataset_merged_3_shuffled.csv
+2026-10-01 19:08:04,759 | INFO |   Колонка текста:  text
+2026-10-01 19:08:04,759 | INFO |   Колонка меток:   label
+2026-10-01 19:08:04,759 | INFO |   Тест:            20.0%
+2026-10-01 19:08:04,759 | INFO |   GridSearch:      выкл
+2026-10-01 19:08:04,759 | INFO |   CV-оценка:       вкл
+2026-10-01 19:08:04,759 | INFO |   Модели:          logistic_regression, svm_linear, random_forest
+2026-10-01 19:08:04,760 | INFO | 
+Загрузка данных из data/sentiment_dataset_merged_3_shuffled.csv...
+2026-10-01 19:08:10,600 | INFO | Загружено 483404 записей из 483404 (удалено 0 пустых)
+2026-10-01 19:08:10,616 | INFO | 
+Уникальные метки: <StringArray>
+['POSITIVE', 'NEUTRAL', 'NEGATIVE']
+Length: 3, dtype: str
+2026-10-01 19:08:10,617 | INFO | 
+Распределение меток:
+2026-10-01 19:08:10,666 | INFO |   POSITIVE: 187644 (38.8%)
+2026-10-01 19:08:10,707 | INFO |   NEUTRAL: 148626 (30.7%)
+2026-10-01 19:08:10,745 | INFO |   NEGATIVE: 147134 (30.4%)
+2026-10-01 19:08:11,288 | INFO | Найдены метки: ['NEGATIVE', 'NEUTRAL', 'POSITIVE']
+2026-10-01 19:08:11,288 | INFO | Преобразованы в числа: {'NEGATIVE': 0, 'NEUTRAL': 1, 'POSITIVE': 2}
+2026-10-01 19:08:11,499 | INFO | 
+Размер обучающей выборки: 386723
+2026-10-01 19:08:11,500 | INFO | Размер тестовой выборки:  96681
+2026-10-01 19:08:11,539 | INFO | Веса классов: {np.int64(0): np.float64(1.0951571840813772), np.int64(1): np.float64(1.084159651026204), np.int64(2): np.float64(0.8587260877771487)}
+2026-10-01 19:08:11,539 | INFO | 
+Предобработка текстов (один раз)...
+2026-10-01 19:13:52,288 | INFO |   Готово: train=386723, test=96681
+2026-10-01 19:13:52,288 | INFO | 
+============================================================
+2026-10-01 19:13:52,288 | INFO | Обучение модели: logistic_regression
+2026-10-01 19:13:52,288 | INFO | ============================================================
+2026-10-01 19:15:24,491 | ERROR | 
+❌ Ошибка: The 'liblinear' solver does not support multiclass classification (n_classes >= 3). Either use another solver or wrap the estimator in a OneVsRestClassifier to keep applying a one-versus-rest scheme.
+2026-10-01 19:15:24,580 | ERROR | Traceback (most recent call last):
+  File "d:\Documents\Visual Studio Code\MainFolder\Diplom\TrainAndDownload\ScikitTrain.py", line 684, in main
+    trainer.train_multiple_models(
+  File "d:\Documents\Visual Studio Code\MainFolder\Diplom\TrainAndDownload\ScikitTrain.py", line 415, in train_multiple_models
+    pipeline.fit(X_train_p, y_train)
+  File "D:\Documents\Visual Studio Code\MainFolder\Diplom\.venv\Lib\site-packages\sklearn\base.py", line 1336, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Documents\Visual Studio Code\MainFolder\Diplom\.venv\Lib\site-packages\sklearn\pipeline.py", line 621, in fit
+    self._final_estimator.fit(Xt, y, **last_step_params["fit"])
+  File "D:\Documents\Visual Studio Code\MainFolder\Diplom\.venv\Lib\site-packages\sklearn\base.py", line 1336, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Documents\Visual Studio Code\MainFolder\Diplom\.venv\Lib\site-packages\sklearn\linear_model\_logistic.py", line 1208, in fit
+    raise ValueError(
+ValueError: The 'liblinear' solver does not support multiclass classification (n_classes >= 3). Either use another solver or wrap the estimator in a OneVsRestClassifier to keep applying a one-versus-rest scheme.
+

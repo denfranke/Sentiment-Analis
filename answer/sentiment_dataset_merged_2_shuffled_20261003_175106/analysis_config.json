@@ -1,0 +1,8 @@
+{
+  "input_file": "D:/Documents/Visual Studio Code/MainFolder/Diplom/data/old1/sentiment_dataset_merged_2_shuffled.csv",
+  "output_dir": "answer\\sentiment_dataset_merged_2_shuffled_20261003_175106",
+  "text_column": "label",
+  "rating_column": "label",
+  "use_rating": true,
+  "max_rows": 1000
+}

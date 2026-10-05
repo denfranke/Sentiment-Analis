@@ -1,0 +1,88 @@
+{
+  "total_errors": 429,
+  "annotated": 8,
+  "categories": {
+    "2": {
+      "name": "Имплицитная оценка",
+      "count": 1,
+      "share_pct": 12.5,
+      "avg_ensemble_confidence": 0.375,
+      "top_culprit": "vader",
+      "top_culprit_count": 1,
+      "culprits": {
+        "vader": 1
+      },
+      "fixable_share": 0.45,
+      "fixable_count": 0.4
+    },
+    "3": {
+      "name": "Амбивалентность",
+      "count": 2,
+      "share_pct": 25.0,
+      "avg_ensemble_confidence": 0.562,
+      "top_culprit": "roberta",
+      "top_culprit_count": 1,
+      "culprits": {
+        "roberta": 1,
+        "flair": 1
+      },
+      "fixable_share": 0.45,
+      "fixable_count": 0.9
+    },
+    "5": {
+      "name": "Сленг / жаргон",
+      "count": 1,
+      "share_pct": 12.5,
+      "avg_ensemble_confidence": 0.375,
+      "top_culprit": "vader",
+      "top_culprit_count": 1,
+      "culprits": {
+        "vader": 1
+      },
+      "fixable_share": 0.65,
+      "fixable_count": 0.7
+    },
+    "7": {
+      "name": "Ошибка перевода",
+      "count": 2,
+      "share_pct": 25.0,
+      "avg_ensemble_confidence": 0.625,
+      "top_culprit": "roberta",
+      "top_culprit_count": 1,
+      "culprits": {
+        "roberta": 1,
+        "vader": 1
+      },
+      "fixable_share": 0.9,
+      "fixable_count": 1.8
+    },
+    "8": {
+      "name": "Шум разметки",
+      "count": 1,
+      "share_pct": 12.5,
+      "avg_ensemble_confidence": 0.25,
+      "top_culprit": "vader",
+      "top_culprit_count": 1,
+      "culprits": {
+        "vader": 1
+      },
+      "fixable_share": 0.15,
+      "fixable_count": 0.1
+    },
+    "9": {
+      "name": "Прочие",
+      "count": 1,
+      "share_pct": 12.5,
+      "avg_ensemble_confidence": 0.5,
+      "top_culprit": "vader",
+      "top_culprit_count": 1,
+      "culprits": {
+        "vader": 1
+      },
+      "fixable_share": 0.25,
+      "fixable_count": 0.2
+    }
+  },
+  "total_fixable": 4.1,
+  "total_fixable_pct": 51.2
+}

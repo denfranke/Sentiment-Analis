@@ -1,0 +1,8 @@
+{
+  "input_file": "D:/Documents/Visual Studio Code/MainFolder/Diplom/data/old1/sentiment_dataset_merged_3.csv",
+  "output_dir": "answer\\sentiment_dataset_merged_3_20261003_174122",
+  "text_column": "label",
+  "rating_column": "label",
+  "use_rating": true,
+  "max_rows": 1000
+}
