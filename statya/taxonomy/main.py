@@ -1,14 +1,3 @@
-#!/usr/bin/env python3
-"""
-Программа построения таксономии ошибок ансамблевой модели
-анализа тональности русскоязычных отзывов.
-
-Использование:
-    python main.py --input data.csv --stage all
-    python main.py --input data.csv --stage annotate
-    python main.py --input data.csv --stage analyze
-"""
-
 import argparse
 import sys
 
@@ -28,9 +17,7 @@ def main():
     )
     parser.add_argument(
         "--input",
-        default=r"D:\Documents\Visual Studio Code\MainFolder\Diplom\statya\taxonomy\data.csv",
-        help="Путь к CSV-файлу с отзывами и предсказаниями "
-            "(по умолчанию: D:\\Documents\\...\\taxonomy\\data.csv)",
+        default=r"D:\Documents\Visual Studio Code\MainFolder\Diplom\statya\taxonomy\errors_only.csv",
     )
     parser.add_argument("--stage", default="all",
                         choices=["all", "filter", "cluster",

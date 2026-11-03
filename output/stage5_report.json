@@ -1,88 +1,159 @@
 {
-  "total_errors": 429,
-  "annotated": 8,
+  "total_errors": 388,
+  "annotated": 388,
   "categories": {
+    "1": {
+      "name": "Сарказм / ирония",
+      "count": 10,
+      "share_pct": 2.58,
+      "avg_ensemble_confidence": 0.525,
+      "top_culprit": "flair",
+      "top_culprit_count": 6,
+      "culprits": {
+        "vader": 2,
+        "flair": 6,
+        "roberta": 1,
+        "rubert": 1
+      },
+      "fixable_share": 0.6,
+      "fixable_count": 6.0
+    },
     "2": {
       "name": "Имплицитная оценка",
-      "count": 1,
-      "share_pct": 12.5,
-      "avg_ensemble_confidence": 0.375,
-      "top_culprit": "vader",
-      "top_culprit_count": 1,
+      "count": 41,
+      "share_pct": 10.57,
+      "avg_ensemble_confidence": 0.543,
+      "top_culprit": "flair",
+      "top_culprit_count": 15,
       "culprits": {
-        "vader": 1
+        "rubert": 9,
+        "vader": 10,
+        "roberta": 4,
+        "flair": 15,
+        "distilbert": 2,
+        "logistic_regression": 1
       },
-      "fixable_share": 0.45,
-      "fixable_count": 0.4
+      "fixable_share": 0.3,
+      "fixable_count": 12.3
     },
     "3": {
       "name": "Амбивалентность",
-      "count": 2,
-      "share_pct": 25.0,
-      "avg_ensemble_confidence": 0.562,
-      "top_culprit": "roberta",
-      "top_culprit_count": 1,
+      "count": 98,
+      "share_pct": 25.26,
+      "avg_ensemble_confidence": 0.526,
+      "top_culprit": "vader",
+      "top_culprit_count": 58,
       "culprits": {
-        "roberta": 1,
-        "flair": 1
+        "vader": 58,
+        "flair": 32,
+        "svm": 1,
+        "roberta": 5,
+        "random_forest": 2
       },
-      "fixable_share": 0.45,
-      "fixable_count": 0.9
+      "fixable_share": 0.6,
+      "fixable_count": 58.8
+    },
+    "4": {
+      "name": "Отрицание и область действия",
+      "count": 27,
+      "share_pct": 6.96,
+      "avg_ensemble_confidence": 0.454,
+      "top_culprit": "flair",
+      "top_culprit_count": 11,
+      "culprits": {
+        "flair": 11,
+        "distilbert": 1,
+        "vader": 9,
+        "rubert": 4,
+        "logistic_regression": 1,
+        "roberta": 1
+      },
+      "fixable_share": 0.7,
+      "fixable_count": 18.9
     },
     "5": {
       "name": "Сленг / жаргон",
-      "count": 1,
-      "share_pct": 12.5,
-      "avg_ensemble_confidence": 0.375,
+      "count": 5,
+      "share_pct": 1.29,
+      "avg_ensemble_confidence": 0.6,
       "top_culprit": "vader",
-      "top_culprit_count": 1,
+      "top_culprit_count": 3,
       "culprits": {
-        "vader": 1
+        "vader": 3,
+        "roberta": 2
       },
       "fixable_share": 0.65,
-      "fixable_count": 0.7
+      "fixable_count": 3.2
     },
-    "7": {
-      "name": "Ошибка перевода",
-      "count": 2,
-      "share_pct": 25.0,
-      "avg_ensemble_confidence": 0.625,
-      "top_culprit": "roberta",
-      "top_culprit_count": 1,
+    "6": {
+      "name": "Короткий текст",
+      "count": 4,
+      "share_pct": 1.03,
+      "avg_ensemble_confidence": 0.562,
+      "top_culprit": "flair",
+      "top_culprit_count": 2,
       "culprits": {
-        "roberta": 1,
-        "vader": 1
-      },
-      "fixable_share": 0.9,
-      "fixable_count": 1.8
-    },
-    "8": {
-      "name": "Шум разметки",
-      "count": 1,
-      "share_pct": 12.5,
-      "avg_ensemble_confidence": 0.25,
-      "top_culprit": "vader",
-      "top_culprit_count": 1,
-      "culprits": {
+        "flair": 2,
+        "rubert": 1,
         "vader": 1
       },
       "fixable_share": 0.15,
-      "fixable_count": 0.1
+      "fixable_count": 0.6
+    },
+    "7": {
+      "name": "Ошибка перевода",
+      "count": 32,
+      "share_pct": 8.25,
+      "avg_ensemble_confidence": 0.469,
+      "top_culprit": "vader",
+      "top_culprit_count": 13,
+      "culprits": {
+        "vader": 13,
+        "rubert": 5,
+        "roberta": 2,
+        "distilbert": 2,
+        "flair": 8,
+        "logistic_regression": 1
+      },
+      "fixable_share": 0.95,
+      "fixable_count": 30.4
+    },
+    "8": {
+      "name": "Шум разметки",
+      "count": 148,
+      "share_pct": 38.14,
+      "avg_ensemble_confidence": 0.583,
+      "top_culprit": "vader",
+      "top_culprit_count": 113,
+      "culprits": {
+        "vader": 113,
+        "flair": 22,
+        "roberta": 8,
+        "distilbert": 1,
+        "rubert": 3,
+        "random_forest": 1
+      },
+      "fixable_share": 0.15,
+      "fixable_count": 22.2
     },
     "9": {
       "name": "Прочие",
-      "count": 1,
-      "share_pct": 12.5,
-      "avg_ensemble_confidence": 0.5,
-      "top_culprit": "vader",
-      "top_culprit_count": 1,
+      "count": 23,
+      "share_pct": 5.93,
+      "avg_ensemble_confidence": 0.467,
+      "top_culprit": "flair",
+      "top_culprit_count": 8,
       "culprits": {
-        "vader": 1
+        "roberta": 3,
+        "flair": 8,
+        "vader": 7,
+        "rubert": 4,
+        "random_forest": 1
       },
-      "fixable_share": 0.25,
-      "fixable_count": 0.2
+      "fixable_share": 0.1,
+      "fixable_count": 2.3
     }
   },
-  "total_fixable": 4.1,
-  "total_fixable_pct": 51.2
+  "total_fixable": 154.7,
+  "total_fixable_pct": 39.9
 }

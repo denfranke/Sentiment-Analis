@@ -17,6 +17,7 @@ sns.set_palette("husl")
 # НАСТРОЙКА ПУТЕЙ
 # ============================================================
 INPUT_FILE = 'data/15k_phone.csv'
+
 OUTPUT_DIR = 'statya'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

@@ -10,3 +10,8 @@ TrainAndDownload/book/add3column/data/sentiment_dataset_merged_2_shuffled_with_d
 TrainAndDownload/book/add3column/data/sentiment_dataset_merged_2_shuffled.csv
 TrainAndDownload/book/add3column/data/merged_all_domains.csv
 models/old model/bad/random_forest_model.joblib
+.env
+/statya
+/answer
+/output
+/output

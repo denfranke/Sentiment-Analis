@@ -473,97 +473,224 @@ def plot_normality_comparison(df):
 def calculate_mathematical_expectation(df):
     """
     Расчет математического ожидания для каждой модели
+    (расширенная версия: мода, дисперсия, асимметрия, эксцесс, SEM с поправкой на f)
     """
     print("\n" + "="*60)
     print("MATHEMATICAL EXPECTATION OF MODEL SCORES")
     print("="*60)
-    
-    score_columns = ['vader_score', 'flair_score', 'rubert_score', 
-                       'roberta_score', 'distilbert_score','logistic_regression_score','svm_score','random_forest_score', 'ensemble_score']
-    
+
+    score_columns = [
+        'vader_score', 'flair_score', 'rubert_score',
+        'roberta_score', 'distilbert_score',
+        'logistic_regression_score', 'svm_score', 'random_forest_score',
+        'ensemble_score'
+    ]
+
     results = {}
-    
+    n_total = len(df)  # объём генеральной совокупности (для поправки на бесповторный отбор)
+
     print("\nMean score values (mathematical expectation):")
     print("-" * 70)
-    
+
     for col in score_columns:
-        if col in df.columns:
-            mean_value = df[col].mean()
-            std_value = df[col].std()
+        if col not in df.columns:
+            continue
+
+        data = df[col].dropna()
+        if len(data) == 0:
+            continue
+
+        n = len(data)
+        mean_value = data.mean()
+        std_value = data.std()
+        var_value = data.var()
+        median_value = data.median()
+
+        # Мода (если несколько — берём первую, но показываем все)
+        mode_series = data.mode()
+        mode_value = mode_series.iloc[0] if len(mode_series) > 0 else np.nan
+        modes_all = mode_series.tolist()
+
+        # Асимметрия и эксцесс
+        skewness = stats.skew(data)
+        kurtosis = stats.kurtosis(data)
+
+        # SEM с поправкой на бесповторный отбор: (s/√n)·√(1−f), f = n/N
+        sem_simple = stats.sem(data)
+        f = n / n_total if n_total > 0 else 0.0
+        sem_fpc = sem_simple * np.sqrt(max(0.0, 1.0 - f))
+
+        # Доверительный интервал (t-интервал на основе SEM с поправкой)
+        try:
             ci_lower, ci_upper = stats.t.interval(
-                0.95, 
-                len(df[col].dropna())-1, 
-                loc=mean_value, 
-                scale=stats.sem(df[col].dropna())
+                0.95, n - 1, loc=mean_value, scale=sem_fpc
             )
-            
-            results[col] = {
-                'mean': mean_value,
-                'std': std_value,
-                'ci_lower': ci_lower,
-                'ci_upper': ci_upper,
-                'median': df[col].median(),
-                'mode': df[col].mode()[0] if len(df[col].mode()) > 0 else np.nan
-            }
-            
-            model_name = col.replace('_score', '').upper()
-            if col == 'ensemble_score':
-                model_name = 'ENSEMBLE'
-            print(f"{model_name:12} | Mean: {mean_value:.3f} | Median: {results[col]['median']:.3f} | "
-                  f"95% CI: [{ci_lower:.3f}, {ci_upper:.3f}]")
-    
-    user_mean = df['rating_numeric'].mean()
-    user_std = df['rating_numeric'].std()
-    print("-" * 70)
-    print(f"Users        | Mean: {user_mean:.3f} | Median: {df['rating_numeric'].median():.3f}")
-    
-    results['user_rating'] = {
-        'mean': user_mean,
-        'std': user_std,
-        'median': df['rating_numeric'].median()
-    }
-    
+        except Exception:
+            ci_lower, ci_upper = np.nan, np.nan
+
+        results[col] = {
+            'mean': mean_value,
+            'std': std_value,
+            'var': var_value,
+            'ci_lower': ci_lower,
+            'ci_upper': ci_upper,
+            'median': median_value,
+            'mode': mode_value,
+            'modes_all': modes_all,
+            'skewness': skewness,
+            'kurtosis': kurtosis,
+            'sem': sem_simple,
+            'sem_fpc': sem_fpc,
+            'f': f,
+            'n': n,
+        }
+
+        model_name = col.replace('_score', '').upper()
+        if col == 'ensemble_score':
+            model_name = 'ENSEMBLE'
+
+        print(f"\n{model_name}")
+        print(f"  Mean      : {mean_value:.3f}")
+        print(f"  Median    : {median_value:.3f}")
+        print(f"  Mode      : {mode_value:.3f}"
+              + (f"  (все моды: {modes_all})" if len(modes_all) > 1 else ""))
+        print(f"  Variance  : {var_value:.3f}")
+        print(f"  Std       : {std_value:.3f}")
+        print(f"  Skewness  : {skewness:.3f}")
+        print(f"  Kurtosis  : {kurtosis:.3f}")
+        print(f"  SEM       : {sem_simple:.4f}")
+        print(f"  SEM (fpc) : {sem_fpc:.4f}   (f = {f:.4f}, n = {n})")
+        print(f"  95% CI    : [{ci_lower:.3f}, {ci_upper:.3f}]")
+
+    # Пользовательские оценки
+    user_data = df['rating_numeric'].dropna()
+    if len(user_data) > 0:
+        user_mean = user_data.mean()
+        user_std = user_data.std()
+        user_var = user_data.var()
+        user_median = user_data.median()
+        user_mode_series = user_data.mode()
+        user_mode = user_mode_series.iloc[0] if len(user_mode_series) > 0 else np.nan
+        user_skew = stats.skew(user_data)
+        user_kurt = stats.kurtosis(user_data)
+        user_sem = stats.sem(user_data)
+        f_user = len(user_data) / n_total if n_total > 0 else 0.0
+        user_sem_fpc = user_sem * np.sqrt(max(0.0, 1.0 - f_user))
+
+        print("-" * 70)
+        print(f"\nUSERS")
+        print(f"  Mean      : {user_mean:.3f}")
+        print(f"  Median    : {user_median:.3f}")
+        print(f"  Mode      : {user_mode:.3f}")
+        print(f"  Variance  : {user_var:.3f}")
+        print(f"  Std       : {user_std:.3f}")
+        print(f"  Skewness  : {user_skew:.3f}")
+        print(f"  Kurtosis  : {user_kurt:.3f}")
+        print(f"  SEM       : {user_sem:.4f}")
+        print(f"  SEM (fpc) : {user_sem_fpc:.4f}   (f = {f_user:.4f}, n = {len(user_data)})")
+
+        results['user_rating'] = {
+            'mean': user_mean,
+            'std': user_std,
+            'var': user_var,
+            'median': user_median,
+            'mode': user_mode,
+            'skewness': user_skew,
+            'kurtosis': user_kurt,
+            'sem': user_sem,
+            'sem_fpc': user_sem_fpc,
+            'f': f_user,
+            'n': len(user_data),
+        }
+
     return results
 
 def analyze_deviations(df):
     """
     Анализ отклонений предсказаний моделей от пользовательских оценок
+    (расширенная версия: + корреляция Пирсона, + линейная регрессия)
     """
     print("\n" + "="*60)
     print("DEVIATION ANALYSIS FROM USER RATINGS")
     print("="*60)
-    
-    score_columns = ['vader_score', 'flair_score', 'rubert_score', 
-                       'roberta_score', 'distilbert_score','logistic_regression_score',
-                       'svm_score','random_forest_score', 'ensemble_score']
-    
+
+    score_columns = [
+        'vader_score', 'flair_score', 'rubert_score',
+        'roberta_score', 'distilbert_score',
+        'logistic_regression_score', 'svm_score', 'random_forest_score',
+        'ensemble_score'
+    ]
+
     deviation_results = {}
-    
+
     print("\nMean Absolute Errors (MAE):")
     print("-" * 70)
-    
+
     for col in score_columns:
-        if col in df.columns:
-            abs_deviation = np.abs(df[col] - df['rating_numeric'])
-            mae = abs_deviation.mean()
-            mae_std = abs_deviation.std()
-            
-            rel_deviation = (abs_deviation / df['rating_numeric'] * 100).mean()
-            rmse = np.sqrt(((df[col] - df['rating_numeric']) ** 2).mean())
-            
-            deviation_results[col] = {
-                'mae': mae,
-                'mae_std': mae_std,
-                'rmse': rmse,
-                'rel_deviation': rel_deviation
-            }
-            
-            model_name = col.replace('_score', '').upper()
-            if col == 'ensemble_score':
-                model_name = 'ENSEMBLE'
-            print(f"{model_name:12} | MAE: {mae:.3f} (+/-{mae_std:.3f}) | RMSE: {rmse:.3f} | "
-                  f"Rel.dev.: {rel_deviation:.1f}%")
-    
+        if col not in df.columns:
+            continue
+
+        # Работаем только по строкам, где есть и предсказание, и рейтинг
+        pair = df[[col, 'rating_numeric']].dropna()
+        if len(pair) < 2:
+            continue
+
+        pred = pair[col].values
+        actual = pair['rating_numeric'].values
+
+        abs_deviation = np.abs(pred - actual)
+        mae = abs_deviation.mean()
+        mae_std = abs_deviation.std()
+        rmse = np.sqrt(((pred - actual) ** 2).mean())
+        rel_deviation = (abs_deviation / actual * 100).mean()
+
+        # Коэффициент корреляции Пирсона (ρ) и R²
+        if np.std(pred) > 0 and np.std(actual) > 0:
+            rho = np.corrcoef(pred, actual)[0, 1]
+        else:
+            rho = np.nan
+        r2 = rho ** 2 if not np.isnan(rho) else np.nan
+
+        # Линейная регрессия: actual = a * pred + b
+        # (наклон показывает, насколько модель «растягивает» шкалу)
+        if np.std(pred) > 0:
+            slope, intercept = np.polyfit(pred, actual, 1)
+        else:
+            slope, intercept = np.nan, np.nan
+
+        deviation_results[col] = {
+            'mae': mae,
+            'mae_std': mae_std,
+            'rmse': rmse,
+            'rel_deviation': rel_deviation,
+            'pearson_r': rho,
+            'r2': r2,
+            'slope': slope,
+            'intercept': intercept,
+            'n': len(pair),
+        }
+
+        model_name = col.replace('_score', '').upper()
+        if col == 'ensemble_score':
+            model_name = 'ENSEMBLE'
+
+        print(f"\n{model_name}")
+        print(f"  MAE           : {mae:.3f} (+/-{mae_std:.3f})")
+        print(f"  RMSE          : {rmse:.3f}")
+        print(f"  Rel. dev.     : {rel_deviation:.1f}%")
+        print(f"  Pearson rho   : {rho:.3f}")
+        print(f"  R^2           : {r2:.3f}")
+        print(f"  Regression    : actual = {slope:.3f} * pred + {intercept:.3f}")
+        print(f"  (n = {len(pair)})")
+
+    # Отдельно — корреляция ensemble с рейтингом (если есть)
+    if 'ensemble_score' in df.columns:
+        pair = df[['ensemble_score', 'rating_numeric']].dropna()
+        if len(pair) >= 2:
+            rho_ens = np.corrcoef(pair['ensemble_score'], pair['rating_numeric'])[0, 1]
+            print("\n" + "-" * 70)
+            print(f"ENSEMBLE vs USER: rho = {rho_ens:.3f}, R^2 = {rho_ens**2:.3f}")
+
     return deviation_results
 
 def analyze_by_rating_groups(df):
@@ -716,27 +843,64 @@ def create_visualizations(df, results, deviation_results):
     ax.grid(True, alpha=0.3)
     ax.axhline(y=3, color='gray', linestyle=':', alpha=0.5)
     
+    # # Plot 4: Scatter plot (ensemble vs user)
+    # ax = axes[3]
+    
+    # if 'ensemble_score' in df.columns:
+    #     scatter = ax.scatter(df['rating_numeric'], df['ensemble_score'], 
+    #                          c=df['rating_numeric'], cmap='viridis', 
+    #                          alpha=0.6, edgecolors='black', linewidth=0.5, s=100)
+        
+    #     ax.plot([1, 5], [1, 5], 'r--', linewidth=2, label='Perfect Match', alpha=0.7)
+        
+    #     z = np.polyfit(df['rating_numeric'], df['ensemble_score'], 1)
+    #     p = np.poly1d(z)
+    #     ax.plot([1, 5], p([1, 5]), 'b-', linewidth=2, 
+    #             label=f'Trend (R^2={np.corrcoef(df["rating_numeric"], df["ensemble_score"])[0,1]**2:.2f})', alpha=0.7)
+        
+    #     ax.set_xlabel('User Rating')
+    #     ax.set_ylabel('ENSEMBLE Score')
+    #     ax.set_title('ENSEMBLE vs User Ratings', fontsize=10, fontweight='bold')
+    #     ax.grid(True, alpha=0.3)
+    #     ax.legend()
+    #     plt.colorbar(scatter, ax=ax, label='User Rating')
+    
     # Plot 4: Scatter plot (ensemble vs user)
     ax = axes[3]
-    
+
     if 'ensemble_score' in df.columns:
-        scatter = ax.scatter(df['rating_numeric'], df['ensemble_score'], 
-                             c=df['rating_numeric'], cmap='viridis', 
-                             alpha=0.6, edgecolors='black', linewidth=0.5, s=100)
-        
-        ax.plot([1, 5], [1, 5], 'r--', linewidth=2, label='Perfect Match', alpha=0.7)
-        
-        z = np.polyfit(df['rating_numeric'], df['ensemble_score'], 1)
-        p = np.poly1d(z)
-        ax.plot([1, 5], p([1, 5]), 'b-', linewidth=2, 
-                label=f'Trend (R^2={np.corrcoef(df["rating_numeric"], df["ensemble_score"])[0,1]**2:.2f})', alpha=0.7)
-        
-        ax.set_xlabel('User Rating')
-        ax.set_ylabel('ENSEMBLE Score')
-        ax.set_title('ENSEMBLE vs User Ratings', fontsize=10, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        ax.legend()
-        plt.colorbar(scatter, ax=ax, label='User Rating')
+        pair = df[['rating_numeric', 'ensemble_score']].dropna()
+        if len(pair) >= 2:
+            pred = pair['ensemble_score'].values
+            actual = pair['rating_numeric'].values
+
+            scatter = ax.scatter(actual, pred,
+                                 c=actual, cmap='viridis',
+                                 alpha=0.6, edgecolors='black',
+                                 linewidth=0.5, s=100)
+
+            ax.plot([1, 5], [1, 5], 'r--', linewidth=2,
+                    label='Perfect Match', alpha=0.7)
+
+            # Регрессия actual ~ pred
+            if np.std(pred) > 0:
+                slope, intercept = np.polyfit(pred, actual, 1)
+                rho = np.corrcoef(pred, actual)[0, 1]
+                r2 = rho ** 2
+
+                xs = np.array([1, 5])
+                ys = slope * xs + intercept
+                ax.plot(xs, ys, 'b-', linewidth=2,
+                        label=(f'Trend: actual = {slope:.2f}*pred + {intercept:.2f}\n'
+                               f'rho = {rho:.2f}, R^2 = {r2:.2f}'),
+                        alpha=0.8)
+
+            ax.set_xlabel('User Rating')
+            ax.set_ylabel('ENSEMBLE Score')
+            ax.set_title('ENSEMBLE vs User Ratings', fontsize=10, fontweight='bold')
+            ax.grid(True, alpha=0.3)
+            ax.legend(fontsize=8)
+            plt.colorbar(scatter, ax=ax, label='User Rating')
     
     plt.tight_layout()
     plt.savefig('answer/sentiment_analysis_dashboard.png', dpi=300, bbox_inches='tight')
@@ -847,18 +1011,37 @@ def main():
         if results and deviation_results:
             summary_data = []
             for key in results:
-                if key != 'user_rating' and key in deviation_results:
-                    model_name = key.replace('_score', '').upper()
-                    model_name = model_name.replace('_FOR_ANALYSIS', '')
-                    if key == 'ensemble_score':
-                        model_name = 'ENSEMBLE'
-                    summary_data.append({
-                        'Model': model_name,
-                        'Mean Score': f"{results[key]['mean']:.3f}",
-                        'MAE': f"{deviation_results[key]['mae']:.3f}",
-                        'RMSE': f"{deviation_results[key]['rmse']:.3f}"
-                    })
-            
+                if key == 'user_rating' or key not in deviation_results:
+                    continue
+
+                model_name = key.replace('_score', '').upper()
+                if key == 'ensemble_score':
+                    model_name = 'ENSEMBLE'
+
+                r = results[key]
+                d = deviation_results[key]
+
+                summary_data.append({
+                    'Model': model_name,
+                    'Mean': f"{r['mean']:.3f}",
+                    'Median': f"{r['median']:.3f}",
+                    'Mode': f"{r['mode']:.3f}",
+                    'Variance': f"{r['var']:.3f}",
+                    'Std': f"{r['std']:.3f}",
+                    'Skewness': f"{r['skewness']:.3f}",
+                    'Kurtosis': f"{r['kurtosis']:.3f}",
+                    'SEM': f"{r['sem']:.4f}",
+                    'SEM_fpc': f"{r['sem_fpc']:.4f}",
+                    'CI_lower': f"{r['ci_lower']:.3f}",
+                    'CI_upper': f"{r['ci_upper']:.3f}",
+                    'MAE': f"{d['mae']:.3f}",
+                    'RMSE': f"{d['rmse']:.3f}",
+                    'Pearson_rho': f"{d['pearson_r']:.3f}",
+                    'R2': f"{d['r2']:.3f}",
+                    'Slope': f"{d['slope']:.3f}",
+                    'Intercept': f"{d['intercept']:.3f}",
+                })
+
             if summary_data:
                 summary = pd.DataFrame(summary_data)
                 summary.to_csv('answer/model_performance_summary.csv', index=False, encoding='utf-8-sig')

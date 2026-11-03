@@ -239,3 +239,6 @@ print(result)
 # for text in texts:
 #     print(f"\nТекст: {text}")
 #     print(predict_sentiment(text))
+
+
+

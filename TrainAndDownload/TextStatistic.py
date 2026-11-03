@@ -1,459 +1,473 @@
-import pandas as pd
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Анализ датасета label,text (POSITIVE / NEGATIVE / NEUTRAL).
+
+Вход:  data/15k_ozon.csv
+Выход: answer/review_analisis/*.png
+"""
+
+import re
+import os
+import warnings
+from collections import Counter
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from collections import Counter
-import re
 from wordcloud import WordCloud
-import warnings
+
 warnings.filterwarnings('ignore')
 
-# Настройка стиля для графиков
+# ═════════════════════════════════════════════════════════════
+# КОНФИГУРАЦИЯ
+# ═════════════════════════════════════════════════════════════
+SCRIPT_DIR   = Path(__file__).resolve().parent          # ...\Diplom\TrainAndDownload
+PROJECT_ROOT = SCRIPT_DIR.parent                        # ...\Diplom
+
+INPUT_FILE  = PROJECT_ROOT / "data" / "15k_ozon_updated.csv"
+OUTPUT_DIR  = PROJECT_ROOT / "answer" / "review_analisis"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_ROWS = 1000     # None — весь файл
+
+LABEL_ORDER  = ['NEGATIVE', 'NEUTRAL', 'POSITIVE']
+LABEL_COLORS = {'NEGATIVE': '#e74c3c', 'NEUTRAL': '#f39c12', 'POSITIVE': '#2ecc71'}
+LABEL_TO_RATING = {'NEGATIVE': 1, 'NEUTRAL': 3, 'POSITIVE': 5}
+
+# Стиль
 plt.style.use('default')
 sns.set_palette("husl")
 
-# Загружаем данные
-df = pd.read_csv('data/отзывы.csv',nrows=1000)
 
-print("="*50)
-print("ПЕРВИЧНЫЙ ОБЗОР ДАННЫХ")
-print("="*50)
+# ═════════════════════════════════════════════════════════════
+# Загрузка
+# ═════════════════════════════════════════════════════════════
+def load_data(path: Path, max_rows: int | None = None) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"Файл не найден: {path.resolve()}")
+    df = pd.read_csv(path, nrows=max_rows)
+    # Нормализуем метки
+    df['label'] = df['label'].astype(str).str.strip().str.upper()
+    # Отбрасываем строки с неизвестными метками
+    df = df[df['label'].isin(LABEL_ORDER)].reset_index(drop=True)
+    # Числовой эквивалент для корреляций
+    df['rating'] = df['label'].map(LABEL_TO_RATING)
+    return df
 
-# Основная информация о датасете
-print(f"Размер датасета: {df.shape}")
-print(f"Колонки: {list(df.columns)}")
-print(f"\nТипы данных:")
-print(df.dtypes)
 
-print("\nПервые 5 строк:")
-print(df.head())
+# ═════════════════════════════════════════════════════════════
+# Текстовые признаки
+# ═════════════════════════════════════════════════════════════
+POSITIVE_EMOJIS = ['👍', '😊', '😍', '❤️', '👌', '🔥', '💯']
+NEGATIVE_EMOJIS = ['👎', '😠', '😡', '💢', '🤬', '😞']
 
-print("\n" + "="*50)
-print("СТАТИСТИКА ПО РЕЙТИНГАМ")
-print("="*50)
+def add_text_features(df: pd.DataFrame) -> pd.DataFrame:
+    text = df['text'].astype(str)
 
-# Базовая статистика по рейтингам
-print(f"Средний рейтинг: {df['rating'].mean():.2f}")
-print(f"Медианный рейтинг: {df['rating'].median():.2f}")
-print(f"Мода рейтинга: {df['rating'].mode()[0]}")
-print(f"Стандартное отклонение: {df['rating'].std():.2f}")
-print(f"Минимальный рейтинг: {df['rating'].min()}")
-print(f"Максимальный рейтинг: {df['rating'].max()}")
+    df['text_length']       = text.str.len()
+    df['word_count']        = text.str.split().str.len()
+    df['sentence_count']    = text.apply(lambda x: len(re.findall(r'[.!?]+', x)))
+    df['exclamation_count'] = text.str.count('!')
+    df['question_count']    = text.str.count(r'\?')
+    df['capital_letters']   = text.apply(lambda x: sum(1 for c in x if c.isupper()))
+    df['capital_ratio']     = df['capital_letters'] / df['text_length'].replace(0, 1)
 
-print("\nРаспределение рейтингов:")
-rating_distribution = df['rating'].value_counts().sort_index()
-print(rating_distribution)
+    df['positive_emojis']   = text.apply(lambda x: sum(x.count(e) for e in POSITIVE_EMOJIS))
+    df['negative_emojis']   = text.apply(lambda x: sum(x.count(e) for e in NEGATIVE_EMOJIS))
 
-print("\nРаспределение рейтингов в процентах:")
-rating_percentage = (df['rating'].value_counts(normalize=True) * 100).sort_index()
-print(rating_percentage.round(2))
+    # Средняя длина предложения
+    df['avg_sentence_length'] = df['text_length'] / df['sentence_count'].replace(0, 1)
+    return df
 
-print("\n" + "="*50)
-print("СТАТИСТИКА ПО АВТОРАМ")
-print("="*50)
 
-# Анализ авторов
-print(f"Уникальных авторов: {df['author'].nunique()}")
-print(f"Всего отзывов: {len(df)}")
+def clean_text(s: str) -> str:
+    s = str(s).lower()
+    s = re.sub(r'[^\w\s]', ' ', s)
+    s = re.sub(r'\d+', ' ', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
 
-print("\nТоп-5 самых активных авторов:")
-top_authors = df['author'].value_counts().head()
-print(top_authors)
 
-# Средний рейтинг по авторам (только для авторов с несколькими отзывами)
-authors_with_multiple = df.groupby('author').filter(lambda x: len(x) > 1)
-if not authors_with_multiple.empty:
-    print("\nСредний рейтинг по авторам (минимум 2 отзыва):")
-    author_avg_rating = authors_with_multiple.groupby('author')['rating'].mean().round(2)
-    print(author_avg_rating.head())
+# ═════════════════════════════════════════════════════════════
+# Печать статистики
+# ═════════════════════════════════════════════════════════════
+def print_stats(df: pd.DataFrame) -> None:
+    print("=" * 60)
+    print("ПЕРВИЧНЫЙ ОБЗОР ДАННЫХ")
+    print("=" * 60)
+    print(f"Размер датасета: {df.shape}")
+    print(f"Колонки: {list(df.columns)}")
+    print("\nТипы данных:")
+    print(df.dtypes)
 
-print("\n" + "="*50)
-print("ТЕКСТОВЫЙ АНАЛИЗ")
-print("="*50)
+    print("\n" + "=" * 60)
+    print("РАСПРЕДЕЛЕНИЕ ТОНАЛЬНОСТИ")
+    print("=" * 60)
+    counts = df['label'].value_counts().reindex(LABEL_ORDER, fill_value=0)
+    pct    = (counts / len(df) * 100).round(2)
+    for lbl in LABEL_ORDER:
+        print(f"  {lbl:10}: {counts[lbl]:5} ({pct[lbl]:5.2f}%)")
 
-# Длина текстов
-df['text_length'] = df['text'].astype(str).str.len()
-df['word_count'] = df['text'].astype(str).str.split().str.len()
+    print("\n" + "=" * 60)
+    print("ТЕКСТОВЫЙ АНАЛИЗ")
+    print("=" * 60)
+    print(f"Средняя длина текста: {df['text_length'].mean():.0f} символов")
+    print(f"Медианная длина: {df['text_length'].median():.0f} символов")
+    print(f"Мин/Макс длина: {df['text_length'].min()} / {df['text_length'].max()}")
+    print(f"Среднее количество слов: {df['word_count'].mean():.1f}")
+    print(f"Медианное количество слов: {df['word_count'].median():.0f}")
+    print(f"Среднее количество предложений: {df['sentence_count'].mean():.2f}")
+    print(f"Среднее количество восклицательных знаков: {df['exclamation_count'].mean():.2f}")
+    print(f"Среднее количество вопросительных знаков: {df['question_count'].mean():.2f}")
+    print(f"Средняя доля заглавных букв: {df['capital_ratio'].mean():.3f}")
 
-print(f"Средняя длина текста: {df['text_length'].mean():.0f} символов")
-print(f"Медианная длина текста: {df['text_length'].median():.0f} символов")
-print(f"Минимальная длина: {df['text_length'].min()} символов")
-print(f"Максимальная длина: {df['text_length'].max()} символов")
+    print("\n" + "=" * 60)
+    print("КОРРЕЛЯЦИИ")
+    print("=" * 60)
+    corr_len  = df['text_length'].corr(df['rating'])
+    corr_word = df['word_count'].corr(df['rating'])
+    print(f"Длина текста ↔ тональность (1/3/5): {corr_len:.3f}")
+    print(f"Количество слов ↔ тональность: {corr_word:.3f}")
 
-print(f"\nСреднее количество слов: {df['word_count'].mean():.1f}")
-print(f"Медианное количество слов: {df['word_count'].median():.0f}")
+    print("\n" + "=" * 60)
+    print("СМАЙЛИКИ И ДУБЛИКАТЫ")
+    print("=" * 60)
+    print(f"Позитивных смайликов: {df['positive_emojis'].sum()}")
+    print(f"Негативных смайликов: {df['negative_emojis'].sum()}")
+    dups = df['text'].duplicated(keep=False).sum()
+    print(f"Дубликатов: {dups} ({dups/len(df)*100:.1f}%)")
 
-print("\n" + "="*50)
-print("КОРРЕЛЯЦИОННЫЙ АНАЛИЗ")
-print("="*50)
 
-# Корреляция между длиной текста и рейтингом
-correlation = df['text_length'].corr(df['rating'])
-print(f"Корреляция между длиной текста и рейтингом: {correlation:.3f}")
+# ═════════════════════════════════════════════════════════════
+# Дашборд №1: базовые графики
+# ═════════════════════════════════════════════════════════════
+def plot_main_dashboard(df: pd.DataFrame, save_path: Path) -> None:
+    fig = plt.figure(figsize=(16, 12))
 
-print("\n" + "="*50)
-print("ВИЗУАЛИЗАЦИЯ ДАННЫХ")
-print("="*50)
+    # 1. Распределение классов
+    ax = fig.add_subplot(3, 3, 1)
+    counts = df['label'].value_counts().reindex(LABEL_ORDER, fill_value=0)
+    bars = ax.bar(LABEL_ORDER, counts.values,
+                  color=[LABEL_COLORS[l] for l in LABEL_ORDER],
+                  edgecolor='black')
+    for b, v in zip(bars, counts.values):
+        ax.text(b.get_x() + b.get_width()/2, b.get_height(),
+                f'{v}', ha='center', va='bottom', fontweight='bold')
+    ax.set_title('Распределение тональности')
+    ax.set_ylabel('Количество отзывов')
 
-# Создаем фигуру с несколькими графиками
-fig = plt.figure(figsize=(16, 12))
+    # 2. Круговая диаграмма
+    ax = fig.add_subplot(3, 3, 2)
+    counts.plot(kind='pie', autopct='%1.1f%%',
+                colors=[LABEL_COLORS[l] for l in LABEL_ORDER], ax=ax)
+    ax.set_ylabel('')
+    ax.set_title('Доля каждого класса')
 
-# 1. Распределение рейтингов
-ax1 = plt.subplot(3, 3, 1)
-rating_counts = df['rating'].value_counts().sort_index()
-bars = ax1.bar(rating_counts.index, rating_counts.values, color='skyblue', edgecolor='navy')
-ax1.set_xlabel('Рейтинг')
-ax1.set_ylabel('Количество отзывов')
-ax1.set_title('Распределение рейтингов')
-ax1.set_xticks([1, 2, 3, 4, 5])
-# Добавляем значения на столбцы
-for bar in bars:
-    height = bar.get_height()
-    ax1.text(bar.get_x() + bar.get_width()/2., height,
-             f'{int(height)}', ha='center', va='bottom')
+    # 3. Средняя длина текста по классам
+    ax = fig.add_subplot(3, 3, 3)
+    mean_len = df.groupby('label')['text_length'].mean().reindex(LABEL_ORDER)
+    mean_len.plot(kind='barh',
+                  color=[LABEL_COLORS[l] for l in LABEL_ORDER], ax=ax)
+    ax.set_xlabel('Средняя длина (символы)')
+    ax.set_title('Средняя длина текста по тональности')
 
-# 2. Круговая диаграмма рейтингов
-ax2 = plt.subplot(3, 3, 2)
-colors = ['red', 'orange', 'yellow', 'lightgreen', 'green']
-df['rating'].value_counts().sort_index().plot(
-    kind='pie', autopct='%1.1f%%', colors=colors, ax=ax2
-)
-ax2.set_ylabel('')
-ax2.set_title('Доля каждого рейтинга')
+    # 4. Гистограмма длины
+    ax = fig.add_subplot(3, 3, 4)
+    df['text_length'].hist(bins=30, color='purple', edgecolor='black', alpha=0.7, ax=ax)
+    ax.axvline(df['text_length'].mean(), color='red', linestyle='--',
+               label=f'Среднее: {df["text_length"].mean():.0f}')
+    ax.set_xlabel('Длина текста')
+    ax.set_ylabel('Частота')
+    ax.set_title('Распределение длины отзывов')
+    ax.legend()
 
-# 3. Средний рейтинг по авторам (топ-10)
-ax3 = plt.subplot(3, 3, 3)
-author_ratings = df.groupby('author')['rating'].mean().sort_values(ascending=False).head(10)
-author_ratings.plot(kind='barh', color='coral', ax=ax3)
-ax3.set_xlabel('Средний рейтинг')
-ax3.set_title('Топ-10 авторов по среднему рейтингу')
+    # 5. Boxplot длины по классам
+    ax = fig.add_subplot(3, 3, 5)
+    sns.boxplot(x='label', y='text_length', data=df,
+                order=LABEL_ORDER, palette=LABEL_COLORS, ax=ax)
+    ax.set_xlabel('Тональность')
+    ax.set_ylabel('Длина текста')
+    ax.set_title('Длина текста по тональности')
 
-# 4. Распределение длины текстов
-ax4 = plt.subplot(3, 3, 4)
-df['text_length'].hist(bins=20, color='purple', edgecolor='black', alpha=0.7, ax=ax4)
-ax4.set_xlabel('Длина текста (символы)')
-ax4.set_ylabel('Частота')
-ax4.set_title('Распределение длины отзывов')
+    # 6. Scatter: длина vs числовой эквивалент
+    ax = fig.add_subplot(3, 3, 6)
+    jitter = np.random.normal(0, 0.1, size=len(df))
+    colors_scatter = df['label'].map(LABEL_COLORS)
+    ax.scatter(df['text_length'], df['rating'] + jitter,
+               c=colors_scatter, alpha=0.5,
+               edgecolors='black', linewidth=0.5)
+    ax.set_xlabel('Длина текста')
+    ax.set_ylabel('Тональность')
+    ax.set_yticks([1, 3, 5])
+    ax.set_yticklabels(['NEGATIVE', 'NEUTRAL', 'POSITIVE'])
+    ax.set_title('Зависимость тональности от длины')
 
-# 5. Box plot рейтингов по длине текста
-ax5 = plt.subplot(3, 3, 5)
-# Создаем категории длины текста
-df['length_category'] = pd.cut(df['text_length'], 
-                                bins=[0, 50, 100, 200, 500, 1000],
-                                labels=['Очень короткие', 'Короткие', 'Средние', 'Длинные', 'Очень длинные'])
-# Убираем NaN для boxplot
-df_box = df.dropna(subset=['length_category'])
-sns.boxplot(x='length_category', y='rating', data=df_box, ax=ax5)
-ax5.set_xlabel('Категория длины')
-ax5.set_ylabel('Рейтинг')
-ax5.set_title('Рейтинги по категориям длины')
-plt.setp(ax5.xaxis.get_majorticklabels(), rotation=45)
+    # 7. Корреляционная матрица
+    ax = fig.add_subplot(3, 3, 7)
+    corr = df[['rating', 'text_length', 'word_count', 'sentence_count']].corr()
+    sns.heatmap(corr, annot=True, cmap='coolwarm', center=0, ax=ax)
+    ax.set_title('Корреляционная матрица')
 
-# 6. Scatter plot длина vs рейтинг
-ax6 = plt.subplot(3, 3, 6)
-# Добавляем небольшой шум для лучшей визуализации
-jitter = np.random.normal(0, 0.1, size=len(df))
-ax6.scatter(df['text_length'], df['rating'] + jitter, alpha=0.5, c='green', edgecolors='black', linewidth=0.5)
-ax6.set_xlabel('Длина текста')
-ax6.set_ylabel('Рейтинг')
-ax6.set_title('Зависимость рейтинга от длины текста')
-ax6.set_yticks([1, 2, 3, 4, 5])
+    # 8. Stacked bar: тональность по категориям длины
+    ax = fig.add_subplot(3, 3, 8)
+    df['length_category'] = pd.cut(df['text_length'],
+                                   bins=[0, 50, 100, 200, 500, 1000, 10000],
+                                   labels=['<50', '50-100', '100-200',
+                                           '200-500', '500-1000', '>1000'])
+    pivot = pd.crosstab(df['length_category'], df['label']).reindex(columns=LABEL_ORDER, fill_value=0)
+    pivot.plot(kind='bar', stacked=True,
+               color=[LABEL_COLORS[l] for l in LABEL_ORDER], ax=ax)
+    ax.set_xlabel('Длина текста (символы)')
+    ax.set_ylabel('Количество')
+    ax.set_title('Тональность по категориям длины')
+    plt.setp(ax.get_xticklabels(), rotation=45)
 
-# 7. Тепловая карта корреляций
-ax7 = plt.subplot(3, 3, 7)
-corr_matrix = df[['rating', 'text_length', 'word_count']].corr()
-sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, ax=ax7)
-ax7.set_title('Корреляционная матрица')
+    # 9. Кумулятивное распределение длины по классам
+    ax = fig.add_subplot(3, 3, 9)
+    for lbl in LABEL_ORDER:
+        data = df[df['label'] == lbl]['text_length'].sort_values()
+        if len(data) > 0:
+            ax.plot(data.values,
+                    np.arange(1, len(data) + 1) / len(data),
+                    label=lbl, color=LABEL_COLORS[lbl], linewidth=2)
+    ax.set_xlabel('Длина текста')
+    ax.set_ylabel('Накопленная доля')
+    ax.set_title('Кумулятивное распределение длины')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
 
-# 8. Количество отзывов по рейтингам и авторам
-ax8 = plt.subplot(3, 3, 8)
-pivot_table = pd.crosstab(df['author'].head(20), df['rating'])
-pivot_table.plot(kind='bar', stacked=True, ax=ax8, colormap='viridis')
-ax8.set_xlabel('Автор')
-ax8.set_ylabel('Количество отзывов')
-ax8.set_title('Распределение рейтингов по авторам (топ-20)')
-ax8.legend(title='Рейтинг')
-plt.setp(ax8.xaxis.get_majorticklabels(), rotation=45, ha='right')
-
-# 9. Cumulative распределение рейтингов
-ax9 = plt.subplot(3, 3, 9)
-rating_cumsum = df['rating'].value_counts().sort_index().cumsum()
-ax9.plot(rating_cumsum.index, rating_cumsum.values, marker='o', linewidth=2, markersize=8)
-ax9.set_xlabel('Рейтинг')
-ax9.set_ylabel('Накопленная частота')
-ax9.set_title('Кумулятивное распределение')
-ax9.grid(True, alpha=0.3)
-
-plt.tight_layout()
-plt.savefig('answer/review_analisis/reviews_analysis.png', dpi=300, bbox_inches='tight')
-plt.show()
-
-print("\nГрафики сохранены в файл 'reviews_analysis.png'")
-
-print("\n" + "="*50)
-print("ДЕТАЛЬНЫЙ АНАЛИЗ ТЕКСТОВ")
-print("="*50)
-
-# Функция для очистки текста
-def clean_text(text):
-    text = str(text).lower()
-    text = re.sub(r'[^\w\s]', ' ', text)
-    text = re.sub(r'\d+', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-# Применяем очистку
-df['clean_text'] = df['text'].apply(clean_text)
-
-# Анализ часто встречающихся слов по рейтингам
-print("\nТоп-10 слов в позитивных отзывах (рейтинг 4-5):")
-positive_words = ' '.join(df[df['rating'] >= 4]['clean_text']).split()
-positive_counter = Counter(positive_words)
-for word, count in positive_counter.most_common(10):
-    print(f"  {word}: {count}")
-
-print("\nТоп-10 слов в негативных отзывах (рейтинг 1-2):")
-negative_words = ' '.join(df[df['rating'] <= 2]['clean_text']).split()
-negative_counter = Counter(negative_words)
-for word, count in negative_counter.most_common(10):
-    print(f"  {word}: {count}")
-
-# Облако слов для всех отзывов
-try:
-    wordcloud = WordCloud(width=800, height=400, 
-                         background_color='white',
-                         colormap='viridis',
-                         max_words=100).generate(' '.join(df['clean_text']))
-    
-    plt.figure(figsize=(12, 6))
-    plt.imshow(wordcloud, interpolation='bilinear')
-    plt.axis('off')
-    plt.title('Облако слов из всех отзывов', fontsize=16)
     plt.tight_layout()
-    plt.savefig('answer/review_analisis/wordcloud.png', dpi=300, bbox_inches='tight')
-    plt.show()
-    print("\nОблако слов сохранено в 'wordcloud.png'")
-except:
-    print("Не удалось создать облако слов (возможно, недостаточно данных)")
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"[OK] {save_path.name} сохранён")
 
-print("\n" + "="*50)
-print("ВЫВОДЫ И РЕКОМЕНДАЦИИ")
-print("="*50)
 
-# Анализ тональности на основе ключевых слов
-positive_keywords = ['удобный', 'вовремя', 'спасибо', 'отлично', 'хорошо', 'нравится', '👍']
-negative_keywords = ['плохо', 'ужас', 'глюк', 'проблем', 'опоздание', 'обман', '👎']
+# ═════════════════════════════════════════════════════════════
+# Дашборд №2: дополнительные графики
+# ═════════════════════════════════════════════════════════════
+def plot_additional_dashboard(df: pd.DataFrame, save_path: Path) -> None:
+    fig = plt.figure(figsize=(15, 15))
 
-def check_sentiment(text):
-    text = str(text).lower()
-    pos_count = sum(1 for word in positive_keywords if word in text)
-    neg_count = sum(1 for word in negative_keywords if word in text)
-    if pos_count > neg_count:
-        return 'Позитивный'
-    elif neg_count > pos_count:
-        return 'Негативный'
+    # 1. Радар характеристик по классам
+    ax = fig.add_subplot(3, 3, 1, projection='polar')
+    metrics = ['length', 'words', 'sentences', 'exclamations', 'questions']
+    cols    = ['text_length', 'word_count', 'sentence_count',
+               'exclamation_count', 'question_count']
+    groups = df.groupby('label')[cols].mean().reindex(LABEL_ORDER)
+    # Нормализация 0..1
+    norm = (groups - groups.min()) / (groups.max() - groups.min()).replace(0, 1)
+
+    angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
+    angles += angles[:1]
+
+    for lbl in LABEL_ORDER:
+        if lbl in norm.index:
+            vals = norm.loc[lbl].tolist() + [norm.loc[lbl].tolist()[0]]
+            ax.plot(angles, vals, 'o-', linewidth=2,
+                    label=lbl, color=LABEL_COLORS[lbl])
+            ax.fill(angles, vals, alpha=0.1, color=LABEL_COLORS[lbl])
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(metrics)
+    ax.set_title('Радар характеристик по тональности')
+    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+
+    # 2. Сравнение характеристик по тональности
+    ax = fig.add_subplot(3, 3, 2)
+    stats = df.groupby('label')[['text_length', 'word_count', 'sentence_count']].mean().reindex(LABEL_ORDER)
+    stats.plot(kind='bar', ax=ax,
+               color=['#3498db', '#e67e22', '#9b59b6'])
+    ax.set_xlabel('')
+    ax.set_ylabel('Среднее значение')
+    ax.set_title('Сравнение характеристик текста')
+    ax.legend(loc='upper right')
+    plt.setp(ax.get_xticklabels(), rotation=0)
+
+    # 3. Гистограмма средней длины предложения
+    ax = fig.add_subplot(3, 3, 3)
+    df['avg_sentence_length'].hist(bins=30, color='teal',
+                                   edgecolor='black', alpha=0.7, ax=ax)
+    ax.axvline(df['avg_sentence_length'].mean(), color='red', linestyle='--',
+               label=f'Среднее: {df["avg_sentence_length"].mean():.1f}')
+    ax.set_xlabel('Средняя длина предложения')
+    ax.set_ylabel('Частота')
+    ax.set_title('Распределение длины предложений')
+    ax.legend()
+
+    # 4. Scatter с размером точек = число предложений
+    ax = fig.add_subplot(3, 3, 4)
+    sc = ax.scatter(df['text_length'], df['rating'],
+                    c=df['word_count'], s=df['sentence_count'].clip(1, 20) * 20,
+                    alpha=0.6, cmap='viridis',
+                    edgecolors='black', linewidth=0.5)
+    ax.set_xlabel('Длина текста')
+    ax.set_ylabel('Тональность')
+    ax.set_yticks([1, 3, 5])
+    ax.set_yticklabels(['NEGATIVE', 'NEUTRAL', 'POSITIVE'])
+    ax.set_title('Длина × тональность × слова')
+    plt.colorbar(sc, ax=ax, label='Количество слов')
+
+    # 5. Heatmap длины vs тональность
+    ax = fig.add_subplot(3, 3, 5)
+    df['length_bin'] = pd.cut(df['text_length'], bins=10)
+    heatmap = pd.crosstab(df['length_bin'].astype(str), df['label']).reindex(columns=LABEL_ORDER, fill_value=0)
+    sns.heatmap(heatmap, annot=True, fmt='d', cmap='Blues', ax=ax)
+    ax.set_xlabel('')
+    ax.set_ylabel('Длина (категории)')
+    ax.set_title('Распределение длины и тональности')
+
+    # 6. Смайлики по классам
+    ax = fig.add_subplot(3, 3, 6)
+    emoji_df = df.groupby('label')[['positive_emojis', 'negative_emojis']].sum().reindex(LABEL_ORDER)
+    emoji_df.plot(kind='bar', ax=ax, color=['#2ecc71', '#e74c3c'])
+    ax.set_xlabel('Тональность')
+    ax.set_ylabel('Количество смайликов')
+    ax.set_title('Использование смайликов по классам')
+    ax.legend(['Позитивные', 'Негативные'])
+    plt.setp(ax.get_xticklabels(), rotation=0)
+
+    # 7. Облака слов NEGATIVE vs POSITIVE
+    ax = fig.add_subplot(3, 3, 7)
+    try:
+        text_neg = ' '.join(df[df['label'] == 'NEGATIVE']['clean_text'].tolist())
+        text_pos = ' '.join(df[df['label'] == 'POSITIVE']['clean_text'].tolist())
+        if text_neg and text_pos:
+            wc_neg = WordCloud(width=400, height=200, background_color='white',
+                              colormap='Reds', max_words=80).generate(text_neg)
+            wc_pos = WordCloud(width=400, height=200, background_color='white',
+                              colormap='Greens', max_words=80).generate(text_pos)
+            ax.imshow(np.hstack([wc_neg.to_array(), wc_pos.to_array()]),
+                      interpolation='bilinear')
+            ax.axis('off')
+            ax.set_title('Слева: NEGATIVE, справа: POSITIVE')
+        else:
+            ax.text(0.5, 0.5, 'Недостаточно данных', ha='center', va='center')
+            ax.axis('off')
+    except Exception as e:
+        ax.text(0.5, 0.5, f'Ошибка облака: {e}', ha='center', va='center')
+        ax.axis('off')
+
+    # 8. KDE длины по классам
+    ax = fig.add_subplot(3, 3, 8)
+    for lbl in LABEL_ORDER:
+        data = df[df['label'] == lbl]['text_length']
+        if len(data) > 1:
+            sns.kdeplot(data=data, label=lbl,
+                        ax=ax, fill=True, color=LABEL_COLORS[lbl])
+    ax.set_xlabel('Длина текста')
+    ax.set_ylabel('Плотность')
+    ax.set_title('Распределение длины по тональности')
+    ax.legend()
+
+    # 9. Boxplot восклицаний по классам
+    ax = fig.add_subplot(3, 3, 9)
+    sns.boxplot(x='label', y='exclamation_count', data=df,
+                order=LABEL_ORDER, palette=LABEL_COLORS, ax=ax)
+    ax.set_xlabel('Тональность')
+    ax.set_ylabel('Количество «!»')
+    ax.set_title('Восклицания по тональности')
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"[OK] {save_path.name} сохранён")
+
+
+# ═════════════════════════════════════════════════════════════
+# Облако слов по всем отзывам
+# ═════════════════════════════════════════════════════════════
+def plot_wordcloud(df: pd.DataFrame, save_path: Path) -> None:
+    try:
+        text_all = ' '.join(df['clean_text'].tolist())
+        wc = WordCloud(width=1200, height=600, background_color='white',
+                       colormap='viridis', max_words=120).generate(text_all)
+        plt.figure(figsize=(14, 7))
+        plt.imshow(wc, interpolation='bilinear')
+        plt.axis('off')
+        plt.title('Облако слов из всех отзывов', fontsize=16)
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"[OK] {save_path.name} сохранён")
+    except Exception as e:
+        print(f"[warn] Не удалось создать облако слов: {e}")
+
+
+# ═════════════════════════════════════════════════════════════
+# Топ-слова по классам
+# ═════════════════════════════════════════════════════════════
+def print_top_words(df: pd.DataFrame, n: int = 10) -> None:
+    print("\n" + "=" * 60)
+    print("ТОП-СЛОВА ПО КЛАССАМ")
+    print("=" * 60)
+    for lbl in LABEL_ORDER:
+        words = ' '.join(df[df['label'] == lbl]['clean_text']).split()
+        if not words:
+            print(f"\n{lbl}: нет данных")
+            continue
+        print(f"\n{lbl} — топ-{n}:")
+        for word, count in Counter(words).most_common(n):
+            print(f"  {word}: {count}")
+
+
+# ═════════════════════════════════════════════════════════════
+# Выводы
+# ═════════════════════════════════════════════════════════════
+def print_conclusions(df: pd.DataFrame) -> None:
+    print("\n" + "=" * 60)
+    print("КЛЮЧЕВЫЕ ВЫВОДЫ")
+    print("=" * 60)
+    counts = df['label'].value_counts(normalize=True) * 100
+    neg = counts.get('NEGATIVE', 0)
+    pos = counts.get('POSITIVE', 0)
+    neu = counts.get('NEUTRAL', 0)
+
+    print(f"\nВсего отзывов: {len(df)}")
+    print(f"POSITIVE: {pos:.1f}%")
+    print(f"NEUTRAL:  {neu:.1f}%")
+    print(f"NEGATIVE: {neg:.1f}%")
+
+    if neg > 50:
+        print(f"\n⚠️ Доминируют негативные отзывы ({neg:.1f}%)")
+    elif pos > 50:
+        print(f"\n✅ Доминируют позитивные отзывы ({pos:.1f}%)")
     else:
-        return 'Нейтральный'
+        print(f"\n⚖️ Сбалансированное распределение классов")
 
-df['sentiment'] = df['text'].apply(check_sentiment)
-
-print("\nРаспределение тональности (по ключевым словам):")
-sentiment_dist = df['sentiment'].value_counts()
-print(sentiment_dist)
-print(f"\nПроцентное соотношение:")
-sentiment_percent = df['sentiment'].value_counts(normalize=True) * 100
-print(sentiment_percent.round(1))
-
-# Основные выводы
-print("\n" + "-"*30)
-print("КЛЮЧЕВЫЕ ВЫВОДЫ:")
-print("-"*30)
-
-# Вывод 1: Общая оценка
-avg_rating = df['rating'].mean()
-if avg_rating >= 4:
-    print(f"✅ Общая оценка высокая ({avg_rating:.2f}/5)")
-elif avg_rating >= 3:
-    print(f"⚠️ Общая оценка средняя ({avg_rating:.2f}/5)")
-else:
-    print(f"❌ Общая оценка низкая ({avg_rating:.2f}/5)")
-
-# Вывод 2: Проблемные места
-negative_percent = (df['rating'] <= 2).mean() * 100
-if negative_percent > 30:
-    print(f"⚠️ Высокий процент негативных отзывов ({negative_percent:.1f}%)")
-    
-# Вывод 3: Активность пользователей
-if df['author'].nunique() < len(df) * 0.7:
-    print(f"📊 Много повторяющихся авторов, возможно, нужна проверка на накрутки")
-
-print(f"\n📝 Всего проанализировано отзывов: {len(df)}")
-print(f"👥 Уникальных авторов: {df['author'].nunique()}")
+    mean_len = df.groupby('label')['text_length'].mean()
+    if 'NEGATIVE' in mean_len and 'POSITIVE' in mean_len:
+        if mean_len['NEGATIVE'] > mean_len['POSITIVE']:
+            print(f"📏 Негативные отзывы в среднем длиннее "
+                  f"({mean_len['NEGATIVE']:.0f} vs {mean_len['POSITIVE']:.0f} симв.)")
+        else:
+            print(f"📏 Позитивные отзывы в среднем длиннее "
+                  f"({mean_len['POSITIVE']:.0f} vs {mean_len['NEGATIVE']:.0f} симв.)")
 
 
+# ═════════════════════════════════════════════════════════════
+# MAIN
+# ═════════════════════════════════════════════════════════════
+def main():
+    print(f"Загрузка: {INPUT_FILE}")
+    df = load_data(INPUT_FILE, MAX_ROWS)
+    print(f"Загружено строк: {len(df)}")
+
+    df = add_text_features(df)
+    df['clean_text'] = df['text'].apply(clean_text)
+
+    print_stats(df)
+    print_top_words(df, n=10)
+
+    plot_main_dashboard(df,       OUTPUT_DIR / "reviews_analysis.png")
+    plot_additional_dashboard(df, OUTPUT_DIR / "additional_analysis.png")
+    plot_wordcloud(df,            OUTPUT_DIR / "wordcloud.png")
+
+    print_conclusions(df)
+
+    print(f"\nВсе результаты в: {OUTPUT_DIR}")
 
 
-
-
-
-df['text_length'] = df['text'].astype(str).str.len()
-df['word_count'] = df['text'].astype(str).str.split().str.len()
-df['sentence_count'] = df['text'].astype(str).apply(lambda x: len(re.findall(r'[.!?]+', x)))
-df['exclamation_count'] = df['text'].astype(str).str.count('!')
-df['question_count'] = df['text'].astype(str).str.count(r'\?')
-df['capital_letters'] = df['text'].astype(str).apply(lambda x: sum(1 for c in x if c.isupper()))
-df['capital_ratio'] = df['capital_letters'] / df['text_length'].replace(0, 1)
-
-print("="*60)
-print("ДОПОЛНИТЕЛЬНЫЕ ГРАФИКИ ДЛЯ АНАЛИЗА")
-print("="*60)
-
-# Создаем фигуру с сеткой 3x3 (9 графиков)
-fig = plt.figure(figsize=(15, 15))
-
-# 1. Радарная диаграмма характеристик текста по рейтингам
-ax1 = plt.subplot(3, 3, 1, projection='polar')
-# Подготавливаем данные для радара
-metrics = ['length', 'words', 'sentences', 'exclamations', 'questions']
-rating_groups = df.groupby('rating')[['text_length', 'word_count', 'sentence_count', 
-                                      'exclamation_count', 'question_count']].mean()
-
-# Нормализуем данные
-normalized_data = (rating_groups - rating_groups.min()) / (rating_groups.max() - rating_groups.min())
-
-angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
-angles += angles[:1]
-
-for rating in [1, 2, 3, 4, 5]:
-    if rating in normalized_data.index:
-        values = normalized_data.loc[rating].tolist()
-        values += values[:1]
-        ax1.plot(angles, values, 'o-', linewidth=2, label=f'Рейтинг {rating}')
-        ax1.fill(angles, values, alpha=0.1)
-
-ax1.set_xticks(angles[:-1])
-ax1.set_xticklabels(metrics)
-ax1.set_title('Радар характеристик текста по рейтингам')
-ax1.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
-
-
-# 3. Распределение средней длины предложений
-ax3 = plt.subplot(3, 3, 3)
-df['avg_sentence_length'] = df['text_length'] / df['sentence_count'].replace(0, 1)
-df['avg_sentence_length'].hist(bins=30, color='teal', edgecolor='black', alpha=0.7, ax=ax3)
-ax3.set_xlabel('Средняя длина предложения')
-ax3.set_ylabel('Частота')
-ax3.set_title('Распределение средней длины предложений')
-ax3.axvline(df['avg_sentence_length'].mean(), color='red', linestyle='--', 
-            label=f'Среднее: {df["avg_sentence_length"].mean():.1f}')
-ax3.legend()
-
-# 4. Диаграмма рассеяния (длина vs рейтинг)
-ax4 = plt.subplot(3, 3, 4)
-scatter = ax4.scatter(df['text_length'], df['rating'], 
-                      c=df['word_count'], s=df['sentence_count']*20, 
-                      alpha=0.6, cmap='viridis', edgecolors='black', linewidth=0.5)
-ax4.set_xlabel('Длина текста')
-ax4.set_ylabel('Рейтинг')
-ax4.set_title('Длина vs Рейтинг')
-plt.colorbar(scatter, ax=ax4, label='Количество слов')
-
-# 5. Тепловая карта распределения длины и рейтинга
-ax5 = plt.subplot(3, 3, 5)
-# Создаем категории для тепловой карты
-df['length_bin'] = pd.cut(df['text_length'], bins=10)
-df['rating_bin'] = pd.cut(df['rating'], bins=5, labels=[1,2,3,4,5])
-
-heatmap_2d = pd.crosstab(df['length_bin'].astype(str), df['rating_bin'])
-sns.heatmap(heatmap_2d, annot=True, fmt='d', cmap='Blues', ax=ax5)
-ax5.set_xlabel(' ')
-ax5.set_ylabel('Длина текста (категории)')
-ax5.set_title('Распределение длины и рейтинга')
-
-# 6. Сравнение характеристик текста по тональности
-ax6 = plt.subplot(3, 3, 2)
-df['sentiment'] = pd.cut(df['rating'], bins=[0, 2, 3, 5], labels=['Негативные', 'Нейтральные', 'Позитивные'])
-
-sentiment_stats = df.groupby('sentiment')[['text_length', 'word_count', 'sentence_count']].mean()
-sentiment_stats.plot(kind='bar', ax=ax6, colormap='Set3')
-ax6.set_xlabel(' ')
-ax6.set_ylabel('Среднее значение')
-ax6.set_title('Сравнение характеристик текста по тональности')
-ax6.legend(loc='upper right')
-ax6.set_xticklabels(ax6.get_xticklabels(), rotation=0)
-
-# 7. Сравнение облаков слов (рейтинг 1 vs 5)
-ax7 = plt.subplot(3, 3, 7)
-try:
-    # Берем отзывы с рейтингом 1 и 5 для сравнения
-    text_1 = ' '.join(df[df['rating'] == 1]['text'].astype(str).tolist())
-    text_5 = ' '.join(df[df['rating'] == 5]['text'].astype(str).tolist())
-    
-    # Создаем два облака слов рядом
-    if text_1 and text_5:
-        wordcloud_1 = WordCloud(width=400, height=200, background_color='white', colormap='Reds').generate(text_1)
-        wordcloud_5 = WordCloud(width=400, height=200, background_color='white', colormap='Greens').generate(text_5)
-        
-        ax7.imshow(np.hstack([wordcloud_1.to_array(), wordcloud_5.to_array()]), interpolation='bilinear')
-        ax7.axis('off')
-        ax7.set_title('Слева: рейтинг 1, Справа: рейтинг 5')
-    else:
-        ax7.text(0.5, 0.5, 'Недостаточно данных\nдля облака слов', ha='center', va='center')
-        ax7.axis('off')
-except:
-    ax7.text(0.5, 0.5, 'Ошибка создания облака слов', ha='center', va='center')
-    ax7.axis('off')
-
-# 8. Распределение длины по рейтингам (KDE)
-ax8 = plt.subplot(3, 3, 8)
-for i, rating in enumerate([1, 2, 3, 4, 5], 1):
-    if rating in df['rating'].values:
-        data = df[df['rating'] == rating]['text_length']
-        if not data.empty:
-            sns.kdeplot(data=data, label=f'Рейтинг {rating}', ax=ax8, shade=True)
-ax8.set_xlabel('Длина текста')
-ax8.set_ylabel('Плотность')
-ax8.set_title('Распределение длины по рейтингам')
-ax8.legend()
-
-# 9. Использование смайликов по рейтингам
-ax9 = plt.subplot(3, 3, 9)
-# Подсчет смайликов
-positive_emojis = ['👍', '😊', '😍', '❤️', '👌']
-negative_emojis = ['👎', '😠', '😡', '💢', '🤬']
-
-df['positive_emojis'] = df['text'].astype(str).apply(lambda x: sum(x.count(emoji) for emoji in positive_emojis))
-df['negative_emojis'] = df['text'].astype(str).apply(lambda x: sum(x.count(emoji) for emoji in negative_emojis))
-
-emoji_by_rating = df.groupby('rating')[['positive_emojis', 'negative_emojis']].sum()
-emoji_by_rating.plot(kind='bar', ax=ax9, color=['green', 'red'])
-ax9.set_xlabel('Рейтинг')
-ax9.set_ylabel('Количество смайликов')
-ax9.set_title('Использование смайликов по рейтингам')
-ax9.legend(['Позитивные', 'Негативные'])
-ax9.set_xticklabels(ax9.get_xticklabels(), rotation=0)
-
-plt.tight_layout()
-plt.savefig('answer/review_analisis/additional_analysis.png', dpi=300, bbox_inches='tight')
-plt.show()
-
-print("\n✅ Дополнительные графики сохранены в 'additional_analysis.png'")
-
-print("\n" + "="*60)
-print("СТАТИСТИКА ПО НОВЫМ МЕТРИКАМ")
-print("="*60)
-
-print(f"Среднее количество предложений: {df['sentence_count'].mean():.2f}")
-print(f"Среднее количество восклицательных знаков: {df['exclamation_count'].mean():.2f}")
-print(f"Среднее количество вопросительных знаков: {df['question_count'].mean():.2f}")
-print(f"Средняя доля заглавных букв: {df['capital_ratio'].mean():.3f}")
-
-print("\nСтатистика по использованию смайликов:")
-print(f"Всего позитивных смайликов: {df['positive_emojis'].sum()}")
-print(f"Всего негативных смайликов: {df['negative_emojis'].sum()}")
-
-print("\nАнализ дубликатов:")
-duplicates = df['text'].duplicated(keep=False)
-print(f"Количество дубликатов текстов: {duplicates.sum()}")
-if duplicates.sum() > 0:
-    print(f"Процент дубликатов: {(duplicates.sum()/len(df)*100):.1f}%")
+if __name__ == "__main__":
+    main()
